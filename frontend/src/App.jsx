@@ -8,8 +8,13 @@ import VerifyEmailPage from './pages/auth/VerifyEmailPage';
 import SetupWizardPage from './pages/auth/SetupWizardPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import ProjectsPage from './pages/projects/ProjectsPage';
+import FinancePage from './pages/finance/FinancePage';
 import InvoicingPage from './pages/invoicing/InvoicingPage';
 import HRPage from './pages/hr/HRPage';
+import BQPage from './pages/bq/BQPage';
+import ProfilesPage from './pages/profiles/ProfilesPage';
+import UserManagementPage from './pages/users/UserManagementPage';
+import SettingsPage from './pages/settings/SettingsPage';
 import DashboardLayout from './layouts/DashboardLayout';
 
 const PrivateRoute = ({ children }) => {
@@ -36,8 +41,13 @@ export default function App() {
       <Route path="/dashboard" element={<PrivateRoute><DashboardLayout /></PrivateRoute>}>
         <Route index element={<DashboardPage />} />
         <Route path="projects" element={<ProjectsPage />} />
+        <Route path="finance" element={<FinancePage />} />
         <Route path="invoicing" element={<InvoicingPage />} />
         <Route path="hr" element={<HRPage />} />
+        <Route path="bq" element={<BQPage />} />
+        <Route path="profiles" element={<ProfilesPage />} />
+        <Route path="users" element={<UserManagementPage />} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
 
       {/* Catch-all */}

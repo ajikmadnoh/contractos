@@ -1,5 +1,6 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
+import NotificationBell from '../components/NotificationBell';
 
 const navItems = [
   { label: 'Dashboard', path: '/dashboard', icon: '⊞' },
@@ -15,6 +16,7 @@ const navItems = [
   { label: 'CRM', path: '/dashboard/crm', icon: '🎯' },
   { label: 'Fleet', path: '/dashboard/fleet', icon: '🚛' },
   { label: 'Market Rates', path: '/dashboard/rates', icon: '📊' },
+  { label: 'Users', path: '/dashboard/users', icon: '👤' },
   { label: 'Settings', path: '/dashboard/settings', icon: '⚙️' },
 ];
 
@@ -75,9 +77,15 @@ export default function DashboardLayout() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto">
-        <Outlet />
-      </main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top bar */}
+        <header className="flex items-center justify-end gap-3 px-6 py-3 border-b border-navy-light bg-navy flex-shrink-0">
+          <NotificationBell />
+        </header>
+        <main className="flex-1 overflow-y-auto">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
