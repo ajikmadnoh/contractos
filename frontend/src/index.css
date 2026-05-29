@@ -344,16 +344,17 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--sp-lg) var(--sp-xl);
+  padding: 20px 32px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
-  gap: var(--sp-md);
+  gap: 16px;
+  min-height: 72px;
 }
 
-.page-title { font-size: var(--font-xl); font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
-.page-sub { font-size: var(--font-sm); color: var(--text-dim); margin-top: 2px; }
+.page-title { font-size: 20px; font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
+.page-sub { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
 
-.page-body { padding: var(--sp-lg) var(--sp-xl); }
+.page-body { padding: 28px 32px; }
 
 /* ─── CARD ────────────────────────────────────────────────────────────────── */
 .card {
@@ -367,38 +368,41 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--sp-md) var(--sp-lg);
+  padding: 16px 24px;
   border-bottom: 1px solid var(--border);
   gap: var(--sp-sm);
+  min-height: 56px;
 }
 
-.card-title { font-size: var(--font-md); font-weight: 600; color: var(--text); }
-.card-sub { font-size: var(--font-sm); color: var(--text-dim); }
+.card-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.card-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
 
-.card-body { padding: var(--sp-lg); }
+.card-body { padding: 20px 24px; }
 
 /* ─── KPI TILES ───────────────────────────────────────────────────────────── */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: var(--sp-md);
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
 }
 
 .kpi {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: var(--sp-md) var(--sp-lg);
-  cursor: grab;
-  transition: box-shadow 0.15s, transform 0.15s;
+  padding: 20px 24px;
+  min-height: 118px;
+  cursor: default;
+  transition: box-shadow 0.15s, border-color 0.15s;
+  display: flex;
+  flex-direction: column;
 }
-.kpi:active { cursor: grabbing; }
-.kpi:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+.kpi:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.07); border-color: var(--border-strong); }
 
-.kpi-label { font-size: var(--font-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-mute); margin-bottom: var(--sp-xs); }
-.kpi-value { font-size: var(--font-2xl); font-weight: 700; color: var(--text); font-family: 'JetBrains Mono', monospace; letter-spacing: -0.5px; line-height: 1.1; }
-.kpi-foot { display: flex; align-items: center; gap: 4px; margin-top: var(--sp-xs); font-size: var(--font-sm); color: var(--text-dim); }
-.kpi-spark { margin-top: var(--sp-sm); }
+.kpi-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-mute); margin-bottom: 10px; }
+.kpi-value { font-size: 26px; font-weight: 700; color: var(--text); font-family: 'JetBrains Mono', monospace; letter-spacing: -0.5px; line-height: 1.1; }
+.kpi-foot { display: flex; align-items: center; gap: 5px; margin-top: 8px; font-size: 12px; color: var(--text-dim); }
+.kpi-spark { margin-top: auto; padding-top: 10px; }
 
 .kpi-up { color: var(--good); }
 .kpi-down { color: var(--danger); }
@@ -428,22 +432,24 @@ body {
 
 .tbl th {
   text-align: left;
-  font-size: var(--font-xs);
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-mute);
-  padding: var(--sp-sm) var(--sp-md);
+  padding: 10px 16px;
   border-bottom: 1px solid var(--border);
   background: var(--surface-2);
   white-space: nowrap;
 }
 
 .tbl td {
-  padding: var(--sp-sm) var(--sp-md);
+  padding: 11px 16px;
   border-bottom: 1px solid var(--border);
   color: var(--text-2);
   vertical-align: middle;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .tbl tr:last-child td { border-bottom: none; }
@@ -635,13 +641,13 @@ select.input, select.input-field {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--sp-lg);
+  padding: 20px 24px;
   border-bottom: 1px solid var(--border);
 }
 
-.modal-title { font-size: var(--font-lg); font-weight: 600; color: var(--text); }
-.modal-body { padding: var(--sp-lg); display: flex; flex-direction: column; gap: var(--sp-md); }
-.modal-foot { padding: var(--sp-md) var(--sp-lg); border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: var(--sp-sm); }
+.modal-title { font-size: 16px; font-weight: 600; color: var(--text); }
+.modal-body { padding: 24px; display: flex; flex-direction: column; gap: 18px; }
+.modal-foot { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; background: var(--surface-2); border-radius: 0 0 var(--radius-xl) var(--radius-xl); }
 
 /* ─── COMMAND PALETTE ─────────────────────────────────────────────────────── */
 .cmd-overlay {
@@ -800,17 +806,54 @@ select.input, select.input-field {
 }
 
 /* ─── BACKWARD COMPAT (old dark theme → new light theme) ──────────────────── */
-/* These shims let Sprint-3 pages render without breaking until they're rewritten */
-.badge-success { background: var(--good-soft); color: var(--good); font-size: var(--font-xs); padding: 2px 8px; border-radius: 99px; font-weight: 600; display: inline-flex; }
-.badge-warning { background: var(--warn-soft); color: var(--warn); font-size: var(--font-xs); padding: 2px 8px; border-radius: 99px; font-weight: 600; display: inline-flex; }
-.badge-danger  { background: var(--danger-soft); color: var(--danger); font-size: var(--font-xs); padding: 2px 8px; border-radius: 99px; font-weight: 600; display: inline-flex; }
-.badge-info    { background: var(--info-soft); color: var(--info); font-size: var(--font-xs); padding: 2px 8px; border-radius: 99px; font-weight: 600; display: inline-flex; }
-.btn-primary   { display: inline-flex; align-items: center; gap: 6px; background: var(--accent); color: #fff; padding: 8px 14px; border-radius: var(--radius); font-size: var(--font-md); font-weight: 500; border: none; cursor: pointer; font-family: inherit; transition: background 0.12s; }
+/* Badge shims */
+.badge-success { background: var(--good-soft);   color: var(--good);   font-size: 11px; padding: 2px 9px; border-radius: 99px; font-weight: 600; display: inline-flex; }
+.badge-warning { background: var(--warn-soft);   color: var(--warn);   font-size: 11px; padding: 2px 9px; border-radius: 99px; font-weight: 600; display: inline-flex; }
+.badge-danger  { background: var(--danger-soft); color: var(--danger); font-size: 11px; padding: 2px 9px; border-radius: 99px; font-weight: 600; display: inline-flex; }
+.badge-info    { background: var(--info-soft);   color: var(--info);   font-size: 11px; padding: 2px 9px; border-radius: 99px; font-weight: 600; display: inline-flex; }
+
+/* Button shims */
+.btn-primary   { display: inline-flex; align-items: center; gap: 6px; background: var(--accent); color: #fff; padding: 8px 16px; border-radius: var(--radius); font-size: 14px; font-weight: 500; border: none; cursor: pointer; font-family: inherit; transition: background 0.12s; text-decoration: none; }
 .btn-primary:hover { background: var(--accent-2); }
 .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn-secondary { display: inline-flex; align-items: center; gap: 6px; background: var(--surface); color: var(--accent); border: 1px solid var(--accent); padding: 8px 14px; border-radius: var(--radius); font-size: var(--font-md); font-weight: 500; cursor: pointer; font-family: inherit; }
-.btn-ghost     { display: inline-flex; align-items: center; gap: 6px; background: transparent; color: var(--text-dim); border: 1px solid var(--border); padding: 8px 14px; border-radius: var(--radius); font-size: var(--font-md); font-weight: 500; cursor: pointer; font-family: inherit; transition: background 0.12s; }
+.btn-secondary { display: inline-flex; align-items: center; gap: 6px; background: var(--surface); color: var(--accent); border: 1px solid var(--accent); padding: 8px 16px; border-radius: var(--radius); font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit; text-decoration: none; }
+.btn-ghost     { display: inline-flex; align-items: center; gap: 6px; background: transparent; color: var(--text-dim); border: 1px solid var(--border); padding: 8px 16px; border-radius: var(--radius); font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit; transition: background 0.12s; }
 .btn-ghost:hover { background: var(--surface-3); color: var(--text); }
+
+/* ─── FIX: old dark-theme Tailwind classes inside the app shell ────────────── */
+/* text-white was readable on dark — on light bg it becomes invisible          */
+.app .text-white   { color: var(--text)    !important; }
+.app .text-gray-300{ color: var(--text-2)  !important; }
+.app .text-gray-400{ color: var(--text-dim)!important; }
+.app .text-gray-500{ color: var(--text-dim)!important; }
+.app .text-gray-600{ color: var(--text-mute)!important; }
+/* Modal / overlay backgrounds that still use bg-navy-* */
+.app .bg-navy      { background: var(--surface)   !important; color: var(--text); }
+.app .bg-navy-dark { background: var(--bg)        !important; }
+.app .bg-navy-light{ background: var(--surface-2) !important; }
+.app .border-navy-light { border-color: var(--border) !important; }
+/* Old card-like containers inside the app */
+.app .space-y-3 > * + * { margin-top: 12px; }
+.app .space-y-4 > * + * { margin-top: 16px; }
+.app .space-y-6 > * + * { margin-top: 24px; }
+/* Input fields in old-style forms inside the app */
+.app .input-field {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 9px 13px;
+  font-size: 14px;
+  color: var(--text);
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.app .input-field:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.app .input-field::placeholder { color: var(--text-mute); }
 
 .login-card {
   background: var(--surface);
