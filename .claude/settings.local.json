@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(Out-File -Encoding utf8 -FilePath \"C:\\\\Users\\\\m4db0x\\\\Downloads\\\\req_dump.txt\")",
+      "Bash(npm --version)",
+      "Bash(git --version)",
+      "Bash(git init *)",
+      "Bash(npm install *)",
+      "Bash(npx create-react-app *)",
+      "PowerShell(cmd /c \"rd /s /q \"\"D:\\\\Project\\\\Web Project\\\\contractos\\\\frontend\"\"\")",
+      "Bash(npm run *)",
+      "Bash(curl -s http://localhost:3000)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(git add *)"
+    ]
+  }
+}

@@ -1,0 +1,47 @@
+import { Routes, Route, Navigate } from 'react-router-dom';
+import useAuthStore from './store/authStore';
+
+import LandingPage from './pages/LandingPage';
+import LoginPage from './pages/auth/LoginPage';
+import SignupPage from './pages/auth/SignupPage';
+import VerifyEmailPage from './pages/auth/VerifyEmailPage';
+import SetupWizardPage from './pages/auth/SetupWizardPage';
+import DashboardPage from './pages/dashboard/DashboardPage';
+import ProjectsPage from './pages/projects/ProjectsPage';
+import InvoicingPage from './pages/invoicing/InvoicingPage';
+import HRPage from './pages/hr/HRPage';
+import DashboardLayout from './layouts/DashboardLayout';
+
+const PrivateRoute = ({ children }) => {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return isAuthenticated ? children : <Navigate to="/login" replace />;
+};
+
+const PublicRoute = ({ children }) => {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return !isAuthenticated ? children : <Navigate to="/dashboard" replace />;
+};
+
+export default function App() {
+  return (
+    <Routes>
+      {/* Public */}
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+      <Route path="/signup" element={<PublicRoute><SignupPage /></PublicRoute>} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
+      <Route path="/setup" element={<PrivateRoute><SetupWizardPage /></PrivateRoute>} />
+
+      {/* Protected — inside dashboard layout */}
+      <Route path="/dashboard" element={<PrivateRoute><DashboardLayout /></PrivateRoute>}>
+        <Route index element={<DashboardPage />} />
+        <Route path="projects" element={<ProjectsPage />} />
+        <Route path="invoicing" element={<InvoicingPage />} />
+        <Route path="hr" element={<HRPage />} />
+      </Route>
+
+      {/* Catch-all */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
