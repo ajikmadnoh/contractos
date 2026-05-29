@@ -67,14 +67,17 @@ router.get('/maintenance', async (req, res, next) => {
     const { vehicle_id } = req.query;
     const { db } = req;
     let q = `
-      SELECT fm.*, fv.name AS vehicle_name
+      SELECT fm.*,
+        COALESCE(fm.maintenance_date, fm.scheduled_date, fm.completed_date) AS maintenance_date,
+        COALESCE(fm.description, fm.notes) AS description,
+        fv.name AS vehicle_name
       FROM fleet_maintenance fm
       JOIN fleet_vehicles fv ON fv.id = fm.vehicle_id
-      WHERE fm.tenant_id = $1
+      WHERE fv.tenant_id = $1
     `;
     const params = [req.tenant_id];
     if (vehicle_id) { q += ` AND fm.vehicle_id = $2`; params.push(vehicle_id); }
-    q += ` ORDER BY fm.maintenance_date DESC`;
+    q += ` ORDER BY COALESCE(fm.maintenance_date, fm.scheduled_date, fm.completed_date) DESC NULLS LAST`;
     const { rows } = await db.query(q, params);
     res.json({ records: rows });
   } catch (err) { next(err); }
@@ -85,18 +88,24 @@ router.post('/maintenance', async (req, res, next) => {
     const { vehicle_id, maintenance_type, description, maintenance_date, cost, next_service_date } = req.body;
     const { db } = req;
 
-    // Update vehicle status to maintenance if not already
+    // Verify vehicle belongs to this tenant
+    const { rows: veh } = await db.query(
+      `SELECT id FROM fleet_vehicles WHERE id=$1 AND tenant_id=$2`, [vehicle_id, req.tenant_id]
+    );
+    if (!veh.length) return res.status(404).json({ error: 'Vehicle not found' });
+
+    // Update vehicle status to maintenance
     await db.query(`
       UPDATE fleet_vehicles SET status='maintenance', updated_at=NOW()
-      WHERE id=$1 AND tenant_id=$2 AND status='active'
-    `, [vehicle_id, req.tenant_id]);
+      WHERE id=$1 AND status='active'
+    `, [vehicle_id]);
 
     const { rows } = await db.query(`
       INSERT INTO fleet_maintenance
-        (tenant_id, vehicle_id, maintenance_type, description, maintenance_date, cost, next_service_date, recorded_by)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        (tenant_id, vehicle_id, maintenance_type, description, notes, maintenance_date, scheduled_date, cost, next_service_date, recorded_by, status)
+      VALUES ($1,$2,$3,$4,$4,$5,$5,$6,$7,$8,'completed')
       RETURNING *
-    `, [req.tenant_id, vehicle_id, maintenance_type, description, maintenance_date,
+    `, [req.tenant_id, vehicle_id, maintenance_type, description, maintenance_date || null,
         cost || 0, next_service_date || null, req.user.id]);
     res.status(201).json({ record: rows[0] });
   } catch (err) { next(err); }

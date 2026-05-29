@@ -42,46 +42,45 @@ export default function HRPage() {
   ];
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
+    <>
+      <div className="page-head">
         <div>
-          <h1 className="text-2xl font-bold text-white">HR</h1>
-          <p className="text-gray-400 text-sm mt-1">Attendance, leave and payroll</p>
+          <h1 className="page-title">HR</h1>
+          <p className="page-sub">Attendance, leave and payroll</p>
         </div>
-
         {/* Clock in / out */}
-        <div className="flex items-center gap-3">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {activeSession ? (
-            <div className="flex items-center gap-3">
-              <div className="text-right">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
-                  <span className="text-success text-sm font-medium">Clocked In</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--good)', display: 'inline-block' }} />
+                  <span style={{ color: 'var(--good)', fontSize: 'var(--font-sm)', fontWeight: 600 }}>Clocked In</span>
                 </div>
-                <p className="text-xs text-gray-400">Since {format(new Date(activeSession.clock_in), 'HH:mm')}</p>
+                <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-mute)' }}>Since {format(new Date(activeSession.clock_in), 'HH:mm')}</p>
               </div>
-              <button onClick={() => clockOut.mutate()} disabled={clockOut.isPending} className="btn-secondary">
-                {clockOut.isPending ? 'Clocking out...' : 'Clock Out'}
+              <button onClick={() => clockOut.mutate()} disabled={clockOut.isPending} className="btn ghost sm">
+                {clockOut.isPending ? 'Clocking out…' : 'Clock Out'}
               </button>
             </div>
           ) : (
-            <button onClick={() => clockIn.mutate()} disabled={clockIn.isPending} className="btn-primary">
-              {clockIn.isPending ? 'Clocking in...' : '▶ Clock In'}
+            <button onClick={() => clockIn.mutate()} disabled={clockIn.isPending} className="btn primary sm">
+              {clockIn.isPending ? 'Clocking in…' : '▶ Clock In'}
             </button>
           )}
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-navy rounded-lg p-1 mb-6 w-fit">
+      <div className="tabs">
         {tabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-5 py-2 rounded-md text-sm font-medium transition-colors ${tab === t.id ? 'bg-gold text-navy-dark' : 'text-gray-400 hover:text-white'}`}>
+          <button key={t.id} className={`tab${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
             {t.label}
           </button>
         ))}
       </div>
 
+      <div className="page-body">
       {tab === 'attendance' && (
         <div className="card overflow-hidden p-0">
           {attendance.length === 0 ? (
@@ -121,7 +120,8 @@ export default function HRPage() {
       {tab === 'leave' && (
         <LeaveTab leaves={leaves} refetch={() => qc.invalidateQueries(['leaves'])} />
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

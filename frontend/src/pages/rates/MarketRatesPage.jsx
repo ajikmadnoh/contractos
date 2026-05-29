@@ -38,44 +38,45 @@ export default function MarketRatesPage() {
   });
 
   return (
-    <div className="p-8">
-      <div className="mb-6 flex items-start justify-between">
+    <>
+      <div className="page-head">
         <div>
-          <h1 className="text-2xl font-bold text-white">Market Rates</h1>
-          <p className="text-gray-400 text-sm mt-1">Labour, material and plant rates — your internal benchmark library</p>
+          <h1 className="page-title">Market Rates</h1>
+          <p className="page-sub">Labour, material and plant rates — your internal benchmark library</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn-primary">+ Add Rate</button>
+        <button onClick={() => setShowModal(true)} className="btn primary sm">+ Add Rate</button>
       </div>
 
       {/* Info banner */}
-      <div className="bg-navy-light border border-gold/30 rounded-lg px-4 py-3 mb-6 flex items-start gap-3">
-        <span className="text-gold text-lg">💡</span>
+      <div style={{ margin: '16px 32px 0', background: 'var(--info-soft)', border: '1px solid var(--info)', borderRadius: 'var(--radius)', padding: '10px 14px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+        <span style={{ fontSize: '16px' }}>💡</span>
         <div>
-          <p className="text-sm text-white font-medium">Your private rate library</p>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Build your own benchmark library of labour, material and plant rates. Use these when preparing your BQ estimates.
-            Rates are private to your company — market comparison data coming in a future update.
+          <p style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--text)' }}>Your private rate library</p>
+          <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-dim)', marginTop: '2px' }}>
+            Build your own benchmark library of labour, material and plant rates for BQ estimates. Private to your company.
           </p>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-3 mb-5">
+      <div style={{ padding: '12px 32px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
         <input
-          className="input-field w-72"
-          placeholder="Search rates..."
+          className="input"
+          style={{ width: '260px' }}
+          placeholder="Search rates…"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        <div className="flex gap-1">
+        <div className="seg-toggle">
           {CATEGORIES.map(cat => (
-            <button key={cat} onClick={() => setCategory(cat)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${category === cat ? 'bg-gold text-navy-dark' : 'bg-navy-light text-gray-400 hover:text-white'}`}>
+            <button key={cat} className={`seg-btn${category === cat ? ' active' : ''}`} onClick={() => setCategory(cat)}>
               {cat}
             </button>
           ))}
         </div>
       </div>
+
+      <div className="page-body">
 
       {isLoading ? (
         <div className="text-center py-16 text-gray-500">Loading...</div>
@@ -176,6 +177,7 @@ export default function MarketRatesPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

@@ -14,26 +14,26 @@ export default function InventoryPage() {
   const [tab, setTab] = useState('items');
 
   return (
-    <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Inventory</h1>
-        <p className="text-gray-400 text-sm mt-1">Track materials, tools and supplies across all projects</p>
+    <>
+      <div className="page-head">
+        <div>
+          <h1 className="page-title">Inventory</h1>
+          <p className="page-sub">Track materials, tools and supplies across all projects</p>
+        </div>
       </div>
-
       <InventorySummary />
-
-      <div className="flex gap-1 mb-6 border-b border-navy-light">
+      <div className="tabs">
         {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${tab === t.id ? 'border-gold text-gold' : 'border-transparent text-gray-400 hover:text-white'}`}>
+          <button key={t.id} className={`tab${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
             {t.icon} {t.label}
           </button>
         ))}
       </div>
-
-      {tab === 'items' && <ItemsTab />}
-      {tab === 'transactions' && <TransactionsTab />}
-    </div>
+      <div className="page-body">
+        {tab === 'items' && <ItemsTab />}
+        {tab === 'transactions' && <TransactionsTab />}
+      </div>
+    </>
   );
 }
 

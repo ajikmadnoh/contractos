@@ -1,171 +1,265 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
-import { format } from 'date-fns';
+import Icon from '../../components/Icon';
 
-const CLAIM_STATUS = { draft:'bg-navy-light text-gray-400', submitted:'badge-warning', under_review:'badge-warning', certified:'badge-success', paid:'badge-success', rejected:'badge-danger' };
-const CERT_STATUS  = { pending:'badge-warning', certified:'badge-success', paid:'badge-success', overdue:'badge-danger' };
+const statusPill = (s) => {
+  const map = {
+    draft: 'muted', submitted: 'info', under_review: 'warn',
+    certified: 'good', paid: 'good', rejected: 'danger',
+    pending: 'warn', overdue: 'danger',
+  };
+  return map[s] || 'muted';
+};
+
+const fmt = (n) => `RM ${Number(n || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+const TABS = [
+  { id: 'cockpit',   label: 'Cockpit',           icon: 'dashboard' },
+  { id: 'claims',    label: 'Claims (AR)',        icon: 'doc' },
+  { id: 'certs',     label: 'Payment Certs',      icon: 'check' },
+  { id: 'retention', label: 'Retention & Bonds',  icon: 'shield' },
+  { id: 'myinvois',  label: 'MyInvois (LHDN)',    icon: 'zap' },
+];
 
 export default function FinancePage() {
-  const [tab, setTab] = useState('claims');
+  const [tab, setTab] = useState('cockpit');
   const qc = useQueryClient();
 
-  const { data: claims = [], isLoading: loadingClaims } = useQuery({
+  const { data: claims = [] } = useQuery({
     queryKey: ['claims'],
     queryFn: () => api.get('/finance/claims').then(r => r.data),
   });
 
-  const { data: certs = [], isLoading: loadingCerts } = useQuery({
+  const { data: certs = [] } = useQuery({
     queryKey: ['payment-certs'],
     queryFn: () => api.get('/finance/payment-certs').then(r => r.data),
   });
 
   const totalCertified = certs.filter(c => c.status !== 'paid').reduce((s, c) => s + Number(c.certified_amount || 0), 0);
   const overdueCount   = certs.filter(c => c.status === 'overdue').length;
+  const totalClaims    = claims.reduce((s, c) => s + Number(c.amount || 0), 0);
+  const paidClaims     = claims.filter(c => c.status === 'paid').reduce((s, c) => s + Number(c.amount || 0), 0);
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
+    <>
+      {/* Page header */}
+      <div className="page-head">
         <div>
-          <h1 className="text-2xl font-bold text-white">Finance</h1>
-          <p className="text-gray-400 text-sm mt-1">
-            Unpaid certs: <span className="text-gold font-semibold">RM {totalCertified.toLocaleString()}</span>
-            {overdueCount > 0 && <span className="text-red-400 ml-3">⚠ {overdueCount} overdue</span>}
+          <h1 className="page-title">Finance</h1>
+          <p className="page-sub">
+            Outstanding: <strong style={{ color: 'var(--warn)' }}>{fmt(totalCertified)}</strong>
+            {overdueCount > 0 && <span style={{ color: 'var(--danger)', marginLeft: '12px' }}>⚠ {overdueCount} overdue</span>}
           </p>
+        </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button className="btn ghost sm"><Icon name="download" size={14} /> Export</button>
+          <button className="btn primary sm" onClick={() => setTab('claims')}>
+            <Icon name="plus" size={14} /> New Claim
+          </button>
         </div>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
-        {[
-          { label: 'Total Claims', value: claims.length, icon: '📋', color: 'border-gold' },
-          { label: 'Payment Certs Pending', value: certs.filter(c => c.status === 'pending' || c.status === 'certified').length, icon: '📄', color: 'border-yellow-500' },
-          { label: 'Overdue Certs', value: overdueCount, icon: '⚠️', color: 'border-danger-light' },
-        ].map(card => (
-          <div key={card.label} className={`card border-l-4 ${card.color}`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-400 uppercase tracking-wide">{card.label}</p>
-                <p className="text-2xl font-bold text-white mt-1">{card.value}</p>
-              </div>
-              <span className="text-3xl opacity-60">{card.icon}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-
       {/* Tabs */}
-      <div className="flex gap-1 bg-navy rounded-lg p-1 mb-6 w-fit">
-        {[{id:'claims',label:'Claims'},{id:'certs',label:'Payment Certificates'}].map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-5 py-2 rounded-md text-sm font-medium transition-colors ${tab === t.id ? 'bg-gold text-navy-dark' : 'text-gray-400 hover:text-white'}`}>
+      <div className="tabs">
+        {TABS.map(t => (
+          <button key={t.id} className={`tab${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
+            <Icon name={t.icon} size={14} />
             {t.label}
           </button>
         ))}
       </div>
 
-      {tab === 'claims' && (
-        <ClaimsTab claims={claims} loading={loadingClaims} onRefresh={() => qc.invalidateQueries(['claims'])} />
-      )}
-      {tab === 'certs' && (
-        <CertsTab certs={certs} loading={loadingCerts} onRefresh={() => qc.invalidateQueries(['payment-certs'])} />
-      )}
+      <div className="page-body">
+        {tab === 'cockpit' && (
+          <CockpitTab claims={claims} certs={certs} totalClaims={totalClaims} paidClaims={paidClaims} totalCertified={totalCertified} overdueCount={overdueCount} />
+        )}
+        {tab === 'claims' && (
+          <ClaimsTab claims={claims} onRefresh={() => qc.invalidateQueries(['claims'])} />
+        )}
+        {tab === 'certs' && (
+          <CertsTab certs={certs} onRefresh={() => qc.invalidateQueries(['payment-certs'])} />
+        )}
+        {tab === 'retention' && <ComingSoon label="Retention & Bonds" icon="shield" />}
+        {tab === 'myinvois'  && <ComingSoon label="MyInvois (LHDN e-invoicing)" icon="zap" />}
+      </div>
+    </>
+  );
+}
+
+function ComingSoon({ label, icon }) {
+  return (
+    <div className="empty" style={{ minHeight: '300px' }}>
+      <Icon name={icon} size={36} style={{ color: 'var(--border-strong)' }} />
+      <div className="empty-title">{label}</div>
+      <div className="empty-sub">This module is coming in the next sprint</div>
     </div>
   );
 }
 
-function ClaimsTab({ claims, loading, onRefresh }) {
+function CockpitTab({ claims, certs, totalClaims, paidClaims, totalCertified, overdueCount }) {
+  const pending = certs.filter(c => c.status === 'pending' || c.status === 'certified').length;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* KPI strip */}
+      <div className="kpi-grid">
+        {[
+          { label: 'Total Billed',        value: `RM ${(totalClaims/1000).toFixed(0)}K`,    icon: 'doc',    sub: `${claims.length} claims submitted` },
+          { label: 'Collected',           value: `RM ${(paidClaims/1000).toFixed(0)}K`,     icon: 'check',  sub: 'Fully paid claims', up: true },
+          { label: 'Outstanding',         value: `RM ${(totalCertified/1000).toFixed(0)}K`, icon: 'clock',  sub: 'Certified, unpaid', up: false },
+          { label: 'Overdue Certs',       value: String(overdueCount),                       icon: 'alert',  sub: overdueCount > 0 ? 'Needs follow-up' : 'All current', up: overdueCount === 0 },
+          { label: 'Pending Certs',       value: String(pending),                            icon: 'doc',    sub: 'Awaiting payment' },
+        ].map(k => (
+          <div key={k.label} className="kpi">
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <span className="kpi-label">{k.label}</span>
+              <Icon name={k.icon} size={14} style={{ color: 'var(--text-mute)' }} />
+            </div>
+            <div className="kpi-value">{k.value}</div>
+            <div className="kpi-foot">
+              {k.up !== undefined && (
+                <Icon name={k.up ? 'arrowU' : 'arrowD'} size={11}
+                  style={{ color: k.up ? 'var(--good)' : 'var(--danger)' }} />
+              )}
+              <span style={{ color: k.up === true ? 'var(--good)' : k.up === false ? 'var(--danger)' : 'var(--text-dim)' }}>
+                {k.sub}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Recent claims */}
+      <div className="card">
+        <div className="card-head">
+          <div className="card-title">Recent Claims</div>
+        </div>
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th>Claim #</th><th>Project</th><th>Type</th><th>Date</th><th>Amount</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {claims.length === 0 && (
+              <tr><td colSpan={6}><div className="empty"><div className="empty-title">No claims yet</div></div></td></tr>
+            )}
+            {claims.slice(0, 5).map(c => (
+              <tr key={c.id}>
+                <td className="tbl-mono" style={{ color: 'var(--accent)' }}>{c.claim_number || '—'}</td>
+                <td style={{ color: 'var(--text)' }}>{c.project_name || '—'}</td>
+                <td style={{ textTransform: 'capitalize' }}>{c.claim_type}</td>
+                <td>{fmtDate(c.claim_date)}</td>
+                <td className="tbl-mono">{fmt(c.amount)}</td>
+                <td><span className={`pill ${statusPill(c.status)}`}>{c.status}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ClaimsTab({ claims, onRefresh }) {
   const [showNew, setShowNew] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ claimType: 'progress', claimDate: '', amount: '', description: '' });
+  const [form, setForm] = useState({ claimType: 'progress', claimDate: '', amount: '', description: '', projectId: '' });
 
-  const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: () => api.get('/projects').then(r => r.data) });
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => api.get('/projects').then(r => r.data),
+  });
 
   const handleSubmit = async (e) => {
     e.preventDefault(); setSaving(true);
     try {
-      await api.post('/finance/claims', { ...form, projectId: form.projectId });
+      await api.post('/finance/claims', { ...form });
       setShowNew(false); onRefresh();
-    } catch (err) { alert(err.response?.data?.error || 'Failed.'); }
+      setForm({ claimType: 'progress', claimDate: '', amount: '', description: '', projectId: '' });
+    } catch (err) { alert(err.response?.data?.error || 'Failed to save.'); }
     finally { setSaving(false); }
   };
 
   return (
     <>
-      <div className="flex justify-end mb-4">
-        <button onClick={() => setShowNew(true)} className="btn-primary">+ New Claim</button>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+        <button className="btn primary" onClick={() => setShowNew(true)}>
+          <Icon name="plus" size={14} /> New Claim
+        </button>
       </div>
 
-      {loading ? <p className="text-gray-400 text-sm">Loading...</p> : claims.length === 0 ? (
-        <div className="card text-center py-16">
-          <div className="text-5xl mb-4">📋</div>
-          <h3 className="text-white font-semibold mb-2">No claims yet</h3>
-          <p className="text-gray-400 text-sm mb-6">Submit your first progress or full claim.</p>
-          <button onClick={() => setShowNew(true)} className="btn-primary">New Claim</button>
-        </div>
-      ) : (
-        <div className="card overflow-hidden p-0">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-navy-light">
-                {['Claim #','Project','Type','Date','Amount','Status'].map(h => (
-                  <th key={h} className="text-left text-xs text-gray-400 font-medium px-6 py-4">{h}</th>
-                ))}
+      <div className="card">
+        <table className="tbl">
+          <thead>
+            <tr><th>Claim #</th><th>Project</th><th>Type</th><th>Date</th><th>Amount</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            {claims.length === 0 && (
+              <tr><td colSpan={6}><div className="empty" style={{ padding: '40px' }}>
+                <Icon name="doc" size={32} style={{ color: 'var(--border-strong)' }} />
+                <div className="empty-title">No claims yet</div>
+                <div className="empty-sub">Submit your first progress claim</div>
+                <button className="btn primary sm" onClick={() => setShowNew(true)} style={{ marginTop: '12px' }}>
+                  <Icon name="plus" size={13} /> New Claim
+                </button>
+              </div></td></tr>
+            )}
+            {claims.map(c => (
+              <tr key={c.id}>
+                <td className="tbl-mono" style={{ color: 'var(--accent)' }}>{c.claim_number || '—'}</td>
+                <td style={{ color: 'var(--text)' }}>{c.project_name || '—'}</td>
+                <td style={{ textTransform: 'capitalize' }}>{c.claim_type}</td>
+                <td>{fmtDate(c.claim_date)}</td>
+                <td className="tbl-mono">{fmt(c.amount)}</td>
+                <td><span className={`pill ${statusPill(c.status)}`}>{c.status}</span></td>
               </tr>
-            </thead>
-            <tbody>
-              {claims.map((c, i) => (
-                <tr key={c.id} className={`border-b border-navy-light hover:bg-navy-light ${i%2===0?'':'bg-navy-dark bg-opacity-20'}`}>
-                  <td className="px-6 py-3 font-mono text-xs text-gold">{c.claim_number}</td>
-                  <td className="px-6 py-3 text-white">{c.project_name || '—'}</td>
-                  <td className="px-6 py-3 text-gray-300 capitalize">{c.claim_type}</td>
-                  <td className="px-6 py-3 text-gray-400">{c.claim_date ? format(new Date(c.claim_date), 'dd MMM yyyy') : '—'}</td>
-                  <td className="px-6 py-3 text-white font-medium">RM {Number(c.amount).toLocaleString()}</td>
-                  <td className="px-6 py-3"><span className={`text-xs px-2.5 py-0.5 rounded-full ${CLAIM_STATUS[c.status]}`}>{c.status}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {showNew && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 px-4">
-          <div className="card w-full max-w-md">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-semibold text-white">New Claim</h2>
-              <button onClick={() => setShowNew(false)} className="text-gray-400 hover:text-white text-xl">×</button>
+        <div className="modal-overlay" onClick={() => setShowNew(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-head">
+              <span className="modal-title">New Claim</span>
+              <button className="icon-btn" onClick={() => setShowNew(false)}><Icon name="x" size={16} /></button>
             </div>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="label">Project</label>
-                <select className="input-field" value={form.projectId} onChange={e => setForm(f=>({...f,projectId:e.target.value}))} required>
-                  <option value="">Select project...</option>
-                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+            <form onSubmit={handleSubmit}>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label className="label">Project</label>
+                  <select className="input" value={form.projectId} onChange={e => setForm(f => ({ ...f, projectId: e.target.value }))} required>
+                    <option value="">Select project…</option>
+                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="label">Claim Type</label>
+                  <select className="input" value={form.claimType} onChange={e => setForm(f => ({ ...f, claimType: e.target.value }))}>
+                    <option value="progress">Progress Claim</option>
+                    <option value="full">Full Claim (Final)</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="label">Claim Date</label>
+                  <input type="date" className="input" value={form.claimDate} onChange={e => setForm(f => ({ ...f, claimDate: e.target.value }))} required />
+                </div>
+                <div className="form-group">
+                  <label className="label">Amount (RM)</label>
+                  <input type="number" className="input" placeholder="0.00" min="0" step="0.01" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} required />
+                </div>
+                <div className="form-group">
+                  <label className="label">Description</label>
+                  <textarea rows={3} className="input" style={{ resize: 'vertical' }} placeholder="Work completed this period…" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+                </div>
               </div>
-              <div>
-                <label className="label">Claim Type</label>
-                <select className="input-field" value={form.claimType} onChange={e => setForm(f=>({...f,claimType:e.target.value}))}>
-                  <option value="progress">Progress Claim</option>
-                  <option value="full">Full Claim (Final)</option>
-                </select>
-              </div>
-              <div>
-                <label className="label">Claim Date</label>
-                <input type="date" className="input-field" value={form.claimDate} onChange={e => setForm(f=>({...f,claimDate:e.target.value}))} required />
-              </div>
-              <div>
-                <label className="label">Claim Amount (RM)</label>
-                <input type="number" className="input-field" placeholder="0.00" min="0" step="0.01" value={form.amount} onChange={e => setForm(f=>({...f,amount:e.target.value}))} required />
-              </div>
-              <div>
-                <label className="label">Description</label>
-                <textarea rows={2} className="input-field resize-none" placeholder="Work completed this period..." value={form.description} onChange={e => setForm(f=>({...f,description:e.target.value}))} />
-              </div>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setShowNew(false)} className="btn-ghost flex-1">Cancel</button>
-                <button type="submit" disabled={saving} className="btn-primary flex-1">{saving?'Submitting...':'Submit Claim'}</button>
+              <div className="modal-foot">
+                <button type="button" className="btn ghost" onClick={() => setShowNew(false)}>Cancel</button>
+                <button type="submit" className="btn primary" disabled={saving}>{saving ? 'Submitting…' : 'Submit Claim'}</button>
               </div>
             </form>
           </div>
@@ -175,31 +269,30 @@ function ClaimsTab({ claims, loading, onRefresh }) {
   );
 }
 
-function CertsTab({ certs, loading, onRefresh }) {
-  return loading ? <p className="text-gray-400 text-sm">Loading...</p> : certs.length === 0 ? (
-    <div className="card text-center py-16">
-      <div className="text-5xl mb-4">📄</div>
-      <h3 className="text-white font-semibold mb-2">No payment certificates yet</h3>
-      <p className="text-gray-400 text-sm">Payment certificates are generated when a claim is certified.</p>
-    </div>
-  ) : (
-    <div className="card overflow-hidden p-0">
-      <table className="w-full text-sm">
+function CertsTab({ certs }) {
+  if (certs.length === 0) {
+    return (
+      <div className="empty" style={{ minHeight: '300px' }}>
+        <Icon name="doc" size={36} style={{ color: 'var(--border-strong)' }} />
+        <div className="empty-title">No payment certificates</div>
+        <div className="empty-sub">Certs are generated when a claim is certified by the client</div>
+      </div>
+    );
+  }
+  return (
+    <div className="card">
+      <table className="tbl">
         <thead>
-          <tr className="border-b border-navy-light">
-            {['Cert #','Project','Certified Amount','Due Date','Status'].map(h => (
-              <th key={h} className="text-left text-xs text-gray-400 font-medium px-6 py-4">{h}</th>
-            ))}
-          </tr>
+          <tr><th>Cert #</th><th>Project</th><th>Certified Amount</th><th>Due Date</th><th>Status</th></tr>
         </thead>
         <tbody>
-          {certs.map((c,i) => (
-            <tr key={c.id} className={`border-b border-navy-light hover:bg-navy-light ${i%2===0?'':'bg-navy-dark bg-opacity-20'}`}>
-              <td className="px-6 py-3 font-mono text-xs text-gold">{c.cert_number}</td>
-              <td className="px-6 py-3 text-white">{c.project_name || '—'}</td>
-              <td className="px-6 py-3 text-white font-medium">RM {Number(c.certified_amount||0).toLocaleString()}</td>
-              <td className="px-6 py-3 text-gray-400">{c.due_date ? format(new Date(c.due_date),'dd MMM yyyy') : '—'}</td>
-              <td className="px-6 py-3"><span className={`text-xs px-2.5 py-0.5 rounded-full ${CERT_STATUS[c.status]}`}>{c.status}</span></td>
+          {certs.map(c => (
+            <tr key={c.id}>
+              <td className="tbl-mono" style={{ color: 'var(--accent)' }}>{c.cert_number || '—'}</td>
+              <td style={{ color: 'var(--text)' }}>{c.project_name || '—'}</td>
+              <td className="tbl-mono">{fmt(c.certified_amount)}</td>
+              <td>{fmtDate(c.due_date)}</td>
+              <td><span className={`pill ${statusPill(c.status)}`}>{c.status}</span></td>
             </tr>
           ))}
         </tbody>

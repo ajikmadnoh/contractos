@@ -46,55 +46,57 @@ export default function CRMPage() {
   const fmt = v => 'RM ' + parseFloat(v || 0).toLocaleString('en-MY', { minimumFractionDigits: 0 });
 
   return (
-    <div className="p-8">
-      <div className="mb-6 flex items-start justify-between">
+    <>
+      <div className="page-head">
         <div>
-          <h1 className="text-2xl font-bold text-white">CRM — Tender Pipeline</h1>
-          <p className="text-gray-400 text-sm mt-1">Track tenders, bids and project opportunities</p>
+          <h1 className="page-title">CRM — Tender Pipeline</h1>
+          <p className="page-sub">Track tenders, bids and project opportunities</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn-primary">+ Add Opportunity</button>
+        <button onClick={() => setShowModal(true)} className="btn primary sm">+ Add Opportunity</button>
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        {[
-          { label: 'Total Pipeline Value', value: fmt(totalValue), icon: '💼' },
-          { label: 'Won (This Year)', value: fmt(wonValue), icon: '🏆', cls: 'text-success' },
-          { label: 'Active Opportunities', value: leads.filter(l => !['won','lost'].includes(l.stage)).length, icon: '🎯' },
-          { label: 'Win Rate', value: `${winRate}%`, icon: '📊', cls: winRate >= 50 ? 'text-success' : 'text-yellow-400' },
-        ].map(c => (
-          <div key={c.label} className="card">
-            <p className="text-gray-400 text-xs mb-1">{c.icon} {c.label}</p>
-            <p className={`text-2xl font-bold ${c.cls || 'text-white'}`}>{c.value}</p>
-          </div>
-        ))}
+      <div style={{ padding: '16px 32px', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
+        <div className="kpi-grid">
+          {[
+            { label: 'Total Pipeline Value', value: fmt(totalValue) },
+            { label: 'Won (This Year)', value: fmt(wonValue) },
+            { label: 'Active Opportunities', value: leads.filter(l => !['won','lost'].includes(l.stage)).length },
+            { label: 'Win Rate', value: `${winRate}%` },
+          ].map(c => (
+            <div key={c.label} className="kpi">
+              <div className="kpi-label">{c.label}</div>
+              <div className="kpi-value">{c.value}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* View toggle */}
-      <div className="flex items-center gap-3 mb-5">
-        <div className="flex bg-navy-light rounded-lg p-1">
+      <div style={{ padding: '12px 32px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div className="seg-toggle">
           {['kanban', 'list'].map(v => (
-            <button key={v} onClick={() => setView(v)}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${view === v ? 'bg-gold text-navy-dark' : 'text-gray-400 hover:text-white'}`}>
+            <button key={v} className={`seg-btn${view === v ? ' active' : ''}`} onClick={() => setView(v)}>
               {VIEW_LABELS[v]}
             </button>
           ))}
         </div>
         {view === 'list' && (
-          <select value={filterStage} onChange={e => setFilterStage(e.target.value)} className="input-field w-48 text-sm">
+          <select value={filterStage} onChange={e => setFilterStage(e.target.value)} className="input" style={{ width: '180px' }}>
             <option value="all">All Stages</option>
             {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
         )}
       </div>
 
-      {isLoading ? (
-        <div className="text-center py-16 text-gray-500">Loading...</div>
-      ) : view === 'kanban' ? (
-        <KanbanView leads={leads} onStageChange={(id, stage) => updateStage.mutate({ id, stage })} fmt={fmt} />
-      ) : (
-        <ListView leads={leads.filter(l => filterStage === 'all' || l.stage === filterStage)} fmt={fmt} onStageChange={(id, stage) => updateStage.mutate({ id, stage })} />
-      )}
+      <div className="page-body">
+        {isLoading ? (
+          <div style={{ textAlign: 'center', padding: '64px', color: 'var(--text-mute)' }}>Loading…</div>
+        ) : view === 'kanban' ? (
+          <KanbanView leads={leads} onStageChange={(id, stage) => updateStage.mutate({ id, stage })} fmt={fmt} />
+        ) : (
+          <ListView leads={leads.filter(l => filterStage === 'all' || l.stage === filterStage)} fmt={fmt} onStageChange={(id, stage) => updateStage.mutate({ id, stage })} />
+        )}
 
       {showModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -152,7 +154,8 @@ export default function CRMPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

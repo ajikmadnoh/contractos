@@ -26,50 +26,53 @@ export default function SafetyPage() {
   const [tab, setTab] = useState('incidents');
 
   return (
-    <div className="p-8">
-      <div className="mb-6 flex items-start justify-between">
+    <>
+      <div className="page-head">
         <div>
-          <h1 className="text-2xl font-bold text-white">Safety</h1>
-          <p className="text-gray-400 text-sm mt-1">DOSH / OSHA compliance — incidents, certifications & toolbox talks</p>
+          <h1 className="page-title">Safety</h1>
+          <p className="page-sub">DOSH / OSHA compliance — incidents, certifications & toolbox talks</p>
         </div>
-        <div className="flex items-center gap-2 bg-navy-light px-4 py-2 rounded-lg">
-          <span className="text-2xl">🛡️</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--good-soft)', border: '1px solid var(--good)', borderRadius: 'var(--radius-lg)', padding: '8px 16px' }}>
+          <span>🛡️</span>
           <div>
-            <p className="text-xs text-gray-400">Safety Score</p>
-            <p className="text-lg font-bold text-success">94%</p>
+            <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-mute)' }}>Safety Score</p>
+            <p style={{ fontSize: '18px', fontWeight: 700, color: 'var(--good)' }}>94%</p>
           </div>
         </div>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        {[
-          { label: 'Incidents (30d)', value: '2', icon: '⚠️', cls: 'text-yellow-400' },
-          { label: 'Lost Time Incidents', value: '0', icon: '🏥', cls: 'text-success' },
-          { label: 'Expiring Certs (60d)', value: '3', icon: '📜', cls: 'text-yellow-400' },
-          { label: 'Days Without Incident', value: '47', icon: '✅', cls: 'text-success' },
-        ].map(c => (
-          <div key={c.label} className="card">
-            <p className="text-gray-400 text-xs mb-1">{c.icon} {c.label}</p>
-            <p className={`text-2xl font-bold ${c.cls}`}>{c.value}</p>
-          </div>
-        ))}
+      {/* KPI strip */}
+      <div style={{ padding: '16px 32px', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
+        <div className="kpi-grid">
+          {[
+            { label: 'Incidents (30d)', value: '2', color: 'var(--warn)' },
+            { label: 'Lost Time Incidents', value: '0', color: 'var(--good)' },
+            { label: 'Expiring Certs (60d)', value: '3', color: 'var(--warn)' },
+            { label: 'Days Without Incident', value: '47', color: 'var(--good)' },
+          ].map(c => (
+            <div key={c.label} className="kpi">
+              <div className="kpi-label">{c.label}</div>
+              <div className="kpi-value" style={{ color: c.color }}>{c.value}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-navy-light">
+      <div className="tabs">
         {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${tab === t.id ? 'border-gold text-gold' : 'border-transparent text-gray-400 hover:text-white'}`}>
+          <button key={t.id} className={`tab${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
             {t.icon} {t.label}
           </button>
         ))}
       </div>
 
-      {tab === 'incidents' && <IncidentsTab />}
-      {tab === 'certifications' && <CertificationsTab />}
-      {tab === 'toolbox' && <ToolboxTab />}
-    </div>
+      <div className="page-body">
+        {tab === 'incidents' && <IncidentsTab />}
+        {tab === 'certifications' && <CertificationsTab />}
+        {tab === 'toolbox' && <ToolboxTab />}
+      </div>
+    </>
   );
 }
 

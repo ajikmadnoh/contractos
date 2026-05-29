@@ -19,24 +19,26 @@ export default function ProfilesPage() {
   });
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
+    <>
+      <div className="page-head">
         <div>
-          <h1 className="text-2xl font-bold text-white">Profiles</h1>
-          <p className="text-gray-400 text-sm mt-1">Clients, subcontractors, suppliers and organisations</p>
+          <h1 className="page-title">Profiles</h1>
+          <p className="page-sub">Clients, subcontractors, suppliers and organisations</p>
         </div>
-        <button onClick={() => setShowNew(true)} className="btn-primary">+ New Profile</button>
+        <button onClick={() => setShowNew(true)} className="btn primary sm">+ New Profile</button>
       </div>
 
       {/* Type filter */}
-      <div className="flex gap-2 mb-6 flex-wrap">
+      <div style={{ padding: '10px 32px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
         {['', 'client', 'subcon', 'supplier', 'main_contractor', 'organisation'].map(t => (
           <button key={t} onClick={() => setTypeFilter(t)}
-            className={`px-4 py-1.5 rounded-full text-xs font-medium transition-colors ${typeFilter === t ? 'bg-gold text-navy-dark' : 'bg-navy-light text-gray-400 hover:text-white'}`}>
+            className={`seg-btn${typeFilter === t ? ' active' : ''}`}>
             {t === '' ? 'All' : `${TYPE_ICON[t]} ${t.replace('_',' ').replace(/\b\w/g,l=>l.toUpperCase())}`}
           </button>
         ))}
       </div>
+
+      <div className="page-body">
 
       {isLoading ? (
         <p className="text-gray-400 text-sm">Loading...</p>
@@ -70,7 +72,8 @@ export default function ProfilesPage() {
       )}
 
       {showNew && <NewProfileModal onClose={() => setShowNew(false)} onCreated={() => { setShowNew(false); qc.invalidateQueries(['profiles']); }} />}
-    </div>
+      </div>
+    </>
   );
 }
 

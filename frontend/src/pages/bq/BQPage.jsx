@@ -16,14 +16,15 @@ export default function BQPage() {
   });
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
+    <>
+      <div className="page-head">
         <div>
-          <h1 className="text-2xl font-bold text-white">Tender / BQ</h1>
-          <p className="text-gray-400 text-sm mt-1">Bills of Quantities and tender documents</p>
+          <h1 className="page-title">Tender / BQ</h1>
+          <p className="page-sub">Bills of Quantities and tender documents</p>
         </div>
-        <button onClick={() => setShowNew(true)} className="btn-primary">+ New BQ</button>
+        <button onClick={() => setShowNew(true)} className="btn primary sm">+ New BQ</button>
       </div>
+      <div className="page-body">
 
       {isLoading ? <p className="text-gray-400 text-sm">Loading...</p> : bqs.length === 0 ? (
         <div className="card text-center py-16">
@@ -54,7 +55,8 @@ export default function BQPage() {
       )}
 
       {showNew && <NewBQModal onClose={() => setShowNew(false)} onCreated={(bq) => { setShowNew(false); setSelected(bq); qc.invalidateQueries(['bqs']); }} />}
-    </div>
+      </div>
+    </>
   );
 }
 

@@ -31,14 +31,15 @@ export default function UserManagementPage() {
   const inactiveUsers = users.filter(u => !u.is_active);
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
+    <>
+      <div className="page-head">
         <div>
-          <h1 className="text-2xl font-bold text-white">User Management</h1>
-          <p className="text-gray-400 text-sm mt-1">{activeUsers.length} active user{activeUsers.length !== 1 ? 's' : ''}</p>
+          <h1 className="page-title">User Management</h1>
+          <p className="page-sub">{activeUsers.length} active user{activeUsers.length !== 1 ? 's' : ''}</p>
         </div>
-        <button onClick={() => setShowInvite(true)} className="btn-primary">+ Invite User</button>
+        <button onClick={() => setShowInvite(true)} className="btn primary sm">+ Invite User</button>
       </div>
+      <div className="page-body">
 
       {isLoading ? <p className="text-gray-400 text-sm">Loading...</p> : (
         <div className="card overflow-hidden p-0">
@@ -96,7 +97,8 @@ export default function UserManagementPage() {
       )}
 
       {showInvite && <InviteModal onClose={() => setShowInvite(false)} onInvited={() => { setShowInvite(false); qc.invalidateQueries(['users']); }} />}
-    </div>
+      </div>
+    </>
   );
 }
 

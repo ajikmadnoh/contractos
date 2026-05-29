@@ -15,32 +15,34 @@ export default function SettingsPage() {
   const user = useAuthStore(s => s.user);
 
   return (
-    <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Settings</h1>
-        <p className="text-gray-400 text-sm mt-1">Manage your workspace and account settings</p>
+    <>
+      <div className="page-head">
+        <div>
+          <h1 className="page-title">Settings</h1>
+          <p className="page-sub">Manage your workspace and account settings</p>
+        </div>
       </div>
-
-      <div className="flex gap-6">
+      <div className="page-body" style={{ display: 'flex', gap: '24px' }}>
         {/* Sidebar */}
-        <nav className="w-48 flex-shrink-0 space-y-1">
+        <nav style={{ width: '180px', flexShrink: 0 }}>
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors text-left ${tab === t.id ? 'bg-gold text-navy-dark' : 'text-gray-400 hover:text-white hover:bg-navy-light'}`}>
+              className={`nav-item${tab === t.id ? ' active' : ''}`}
+              style={{ width: '100%' }}>
               <span>{t.icon}</span>{t.label}
             </button>
           ))}
         </nav>
 
         {/* Content */}
-        <div className="flex-1">
+        <div style={{ flex: 1 }}>
           {tab === 'company' && <CompanySettings />}
           {tab === 'security' && <SecuritySettings />}
           {tab === 'billing' && <BillingSettings user={user} />}
           {tab === 'api' && <APISettings />}
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

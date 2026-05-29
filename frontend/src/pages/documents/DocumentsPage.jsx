@@ -69,83 +69,82 @@ export default function DocumentsPage() {
   const docs = data?.documents || [];
 
   return (
-    <div className="flex h-full">
+    <div style={{ display: 'flex', height: '100%' }}>
       {/* Left sidebar — project folders */}
-      <aside className="w-56 border-r border-navy-light flex-shrink-0 flex flex-col bg-navy">
-        <div className="px-4 py-4 border-b border-navy-light">
-          <p className="text-xs text-gray-400 uppercase tracking-wider mb-3">Views</p>
+      <aside style={{ width: '200px', borderRight: '1px solid var(--border)', flexShrink: 0, display: 'flex', flexDirection: 'column', background: 'var(--surface)' }}>
+        <div style={{ padding: '12px 8px', borderBottom: '1px solid var(--border)' }}>
+          <div className="nav-section">Views</div>
           <button
             onClick={() => { setView('global'); setSelectedProject(null); }}
-            className={`w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg text-sm mb-1 transition-colors ${view === 'global' ? 'bg-gold text-navy-dark font-medium' : 'text-gray-400 hover:text-white hover:bg-navy-light'}`}>
-            <span>🌐</span> All Documents
+            className={`nav-item${view === 'global' ? ' active' : ''}`}
+            style={{ width: '100%' }}>
+            🌐 All Documents
           </button>
         </div>
 
-        <div className="px-4 py-4 flex-1 overflow-y-auto">
-          <p className="text-xs text-gray-400 uppercase tracking-wider mb-3">Project Folders</p>
+        <div style={{ padding: '12px 8px', flex: 1, overflowY: 'auto' }}>
+          <div className="nav-section">Project Folders</div>
           {projects.length === 0 ? (
-            <p className="text-xs text-gray-600">No projects yet</p>
+            <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-mute)', padding: '4px 8px' }}>No projects yet</p>
           ) : (
-            <div className="space-y-0.5">
-              {projects.map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => { setView('project'); setSelectedProject(p.id); }}
-                  className={`w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors ${view === 'project' && selectedProject === p.id ? 'bg-gold text-navy-dark font-medium' : 'text-gray-400 hover:text-white hover:bg-navy-light'}`}>
-                  <span>📁</span>
-                  <span className="truncate">{p.name}</span>
-                </button>
-              ))}
-            </div>
+            projects.map(p => (
+              <button
+                key={p.id}
+                onClick={() => { setView('project'); setSelectedProject(p.id); }}
+                className={`nav-item${view === 'project' && selectedProject === p.id ? ' active' : ''}`}
+                style={{ width: '100%' }}>
+                📁 <span className="truncate">{p.name}</span>
+              </button>
+            ))
           )}
         </div>
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="p-6 border-b border-navy-light bg-navy flex-shrink-0">
-          <div className="flex items-center justify-between mb-4">
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
             <div>
-              <h1 className="text-xl font-bold text-white">
+              <h1 className="page-title" style={{ fontSize: 'var(--font-xl)' }}>
                 {view === 'global' ? 'All Documents' : projects.find(p => p.id === selectedProject)?.name || 'Project Documents'}
               </h1>
-              <p className="text-gray-400 text-xs mt-0.5">
-                {docs.length} document{docs.length !== 1 ? 's' : ''}
-              </p>
+              <p className="page-sub">{docs.length} document{docs.length !== 1 ? 's' : ''}</p>
             </div>
-            <button onClick={() => setShowUpload(true)} className="btn-primary">
-              📤 Upload Document
+            <button onClick={() => setShowUpload(true)} className="btn primary sm">
+              📤 Upload
             </button>
           </div>
 
           {/* Search + category filter */}
-          <div className="flex items-center gap-3">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             <input
-              className="input-field w-64 text-sm"
-              placeholder="Search documents..."
+              className="input"
+              style={{ width: '220px' }}
+              placeholder="Search documents…"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
-            <div className="flex gap-1 flex-wrap">
-              {DOC_CATEGORIES.slice(0, 8).map(cat => (
+            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+              {DOC_CATEGORIES.slice(0, 7).map(cat => (
                 <button key={cat} onClick={() => setCategory(cat)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${category === cat ? 'bg-gold text-navy-dark' : 'bg-navy-light text-gray-400 hover:text-white'}`}>
+                  className={`seg-btn${category === cat ? ' active' : ''}`}
+                  style={{ fontSize: 'var(--font-xs)' }}>
                   {cat}
                 </button>
               ))}
               <select
-                value={DOC_CATEGORIES.slice(8).includes(category) ? category : ''}
+                value={DOC_CATEGORIES.slice(7).includes(category) ? category : ''}
                 onChange={e => e.target.value && setCategory(e.target.value)}
-                className="text-xs bg-navy-light text-gray-400 border border-navy-light rounded-lg px-2 py-1">
-                <option value="">More...</option>
-                {DOC_CATEGORIES.slice(8).map(cat => <option key={cat}>{cat}</option>)}
+                className="input" style={{ fontSize: 'var(--font-xs)', padding: '4px 8px', width: 'auto' }}>
+                <option value="">More…</option>
+                {DOC_CATEGORIES.slice(7).map(cat => <option key={cat}>{cat}</option>)}
               </select>
             </div>
           </div>
         </div>
 
         {/* Documents list */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
           {isLoading ? (
             <div className="text-center py-16 text-gray-500">Loading documents...</div>
           ) : docs.length === 0 ? (
