@@ -16,6 +16,7 @@ const authenticate = async (req, res, next) => {
       return res.status(401).json({ error: 'Invalid token.' });
     }
     req.user = result.rows[0];
+    req.tenant_id = result.rows[0].tenant_id; // convenience alias used by all routes
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Invalid or expired token.' });

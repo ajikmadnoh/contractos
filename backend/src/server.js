@@ -6,6 +6,7 @@ const morgan = require('morgan');
 const routes = require('./routes');
 const errorHandler = require('./middleware/errorHandler');
 const { apiLimiter } = require('./middleware/rateLimiter');
+const db = require('./config/database');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -25,6 +26,12 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 // Parse JSON request bodies
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Attach db helpers to every request so routes can use req.db.query()
+app.use((req, res, next) => {
+  req.db = db;
+  next();
+});
 
 // Global rate limiter
 app.use('/api', apiLimiter);

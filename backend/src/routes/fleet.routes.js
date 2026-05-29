@@ -10,11 +10,15 @@ router.get('/vehicles', async (req, res, next) => {
   try {
     const { db } = req;
     const { rows } = await db.query(`
-      SELECT fv.*, p.name AS assigned_project
+      SELECT fv.*,
+        fv.registration_number AS plate_number,
+        fv.roadtax_expiry      AS road_tax_expiry,
+        fv.assigned_project_id AS project_id,
+        p.name                 AS assigned_project
       FROM fleet_vehicles fv
-      LEFT JOIN projects p ON p.id = fv.project_id
+      LEFT JOIN projects p ON p.id = fv.assigned_project_id
       WHERE fv.tenant_id = $1
-      ORDER BY fv.name ASC
+      ORDER BY fv.name ASC NULLS LAST
     `, [req.tenant_id]);
     res.json({ vehicles: rows });
   } catch (err) { next(err); }
@@ -24,14 +28,17 @@ router.post('/vehicles', authorize('director','admin','pm'), async (req, res, ne
   try {
     const { name, vehicle_type, plate_number, make, model, year, status, road_tax_expiry, insurance_expiry, project_id } = req.body;
     const { db } = req;
+    // Map frontend-friendly status to DB CHECK values
+    const dbStatus = { available: 'active', in_use: 'active', maintenance: 'maintenance', decommissioned: 'inactive' }[status] || 'active';
     const { rows } = await db.query(`
       INSERT INTO fleet_vehicles
-        (tenant_id, name, vehicle_type, plate_number, make, model, year, status, road_tax_expiry, insurance_expiry, project_id)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        (tenant_id, name, vehicle_type, registration_number, make, model, year,
+         status, road_tax_expiry, roadtax_expiry, insurance_expiry, assigned_project_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,$10,$11)
       RETURNING *
-    `, [req.tenant_id, name, vehicle_type, plate_number, make, model, year || null,
-        status || 'available', road_tax_expiry || null, insurance_expiry || null, project_id || null]);
-    res.status(201).json({ vehicle: rows[0] });
+    `, [req.tenant_id, name, vehicle_type || 'other', plate_number, make, model,
+        year || null, dbStatus, road_tax_expiry || null, insurance_expiry || null, project_id || null]);
+    res.status(201).json({ vehicle: { ...rows[0], plate_number: rows[0].registration_number, status: status || 'available' } });
   } catch (err) { next(err); }
 });
 
@@ -39,14 +46,15 @@ router.patch('/vehicles/:id', authorize('director','admin','pm'), async (req, re
   try {
     const { status, project_id } = req.body;
     const { db } = req;
+    const dbStatus = status ? ({ available: 'active', in_use: 'active', maintenance: 'maintenance', decommissioned: 'inactive' }[status] || 'active') : null;
     const { rows } = await db.query(`
       UPDATE fleet_vehicles SET
-        status = COALESCE($1, status),
-        project_id = COALESCE($2, project_id),
-        updated_at = NOW()
+        status             = COALESCE($1, status),
+        assigned_project_id = COALESCE($2, assigned_project_id),
+        updated_at         = NOW()
       WHERE id = $3 AND tenant_id = $4
       RETURNING *
-    `, [status, project_id, req.params.id, req.tenant_id]);
+    `, [dbStatus, project_id, req.params.id, req.tenant_id]);
     if (!rows.length) return res.status(404).json({ error: 'Vehicle not found' });
     res.json({ vehicle: rows[0] });
   } catch (err) { next(err); }
@@ -80,7 +88,7 @@ router.post('/maintenance', async (req, res, next) => {
     // Update vehicle status to maintenance if not already
     await db.query(`
       UPDATE fleet_vehicles SET status='maintenance', updated_at=NOW()
-      WHERE id=$1 AND tenant_id=$2 AND status='available'
+      WHERE id=$1 AND tenant_id=$2 AND status='active'
     `, [vehicle_id, req.tenant_id]);
 
     const { rows } = await db.query(`

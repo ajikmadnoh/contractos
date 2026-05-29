@@ -14,7 +14,18 @@
       "mcp__Claude_Preview__preview_start",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(git config *)"
+      "Bash(git config *)",
+      "Bash(psql --version)",
+      "Bash(pg_isready)",
+      "Bash(docker --version)",
+      "Bash(docker exec *)",
+      "Bash(node src/server.js)",
+      "Bash(curl -s http://localhost:5000/api/v1/health)",
+      "Bash(node -e ' *)",
+      "Read(//tmp/**)",
+      "Bash(curl -s -X POST http://localhost:5000/api/v1/auth/signup -H 'Content-Type: application/json' -d '{\"name\":\"Ahmad Razif\",\"email\":\"razif@contractos.my\",\"password\":\"Test1234!\",\"companyName\":\"Razif Construction Sdn Bhd\"}')",
+      "Bash(curl -s -X POST http://localhost:5000/api/v1/auth/verify-email -H 'Content-Type: application/json' -d '{\"token\":\"ede8fe31-e3c9-4ece-87d9-7912e79d6c9e\"}')",
+      "Bash(curl -s -X POST http://localhost:5000/api/v1/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"razif@contractos.my\",\"password\":\"Test1234!\"}')"
     ]
   }
 }
