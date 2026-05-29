@@ -892,6 +892,24 @@ select.input, select.input-field {
   --shadow-pop: 0 0 0 .5px rgba(11,19,32,.08), 0 12px 32px -8px rgba(11,19,32,.16), 0 2px 4px rgba(11,19,32,.05);
 }
 
+/* Blueprint grid backdrop (used by the BQ AI scope-extraction card) */
+:root {
+  --blueprint:
+    repeating-linear-gradient(0deg, transparent 0 31px, rgba(31,79,216,.08) 31px 32px),
+    repeating-linear-gradient(90deg, transparent 0 31px, rgba(31,79,216,.08) 31px 32px);
+}
+[data-theme="sun"] {
+  --blueprint:
+    repeating-linear-gradient(0deg, transparent 0 31px, rgba(216,130,0,.10) 31px 32px),
+    repeating-linear-gradient(90deg, transparent 0 31px, rgba(216,130,0,.10) 31px 32px);
+}
+[data-theme="tropic"] {
+  --blueprint:
+    repeating-linear-gradient(0deg, transparent 0 31px, rgba(15,122,75,.10) 31px 32px),
+    repeating-linear-gradient(90deg, transparent 0 31px, rgba(15,122,75,.10) 31px 32px);
+}
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+
 /* ─── ANIMATED REVEAL ─────────────────────────────────────────────────────── */
 @keyframes rise {
   from { opacity: 0; transform: translateY(6px); }

@@ -42,7 +42,9 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://api.anthropic.com/v1/design/h/ALtUZZshz_EnAq3uEzg55A?open_file=ConstructOS.html\")",
       "Bash(curl -sS -L \"https://api.anthropic.com/v1/design/h/ALtUZZshz_EnAq3uEzg55A?open_file=ConstructOS.html\" -w \"\\\\nHTTP_CODE:%{http_code}\\\\n\")",
       "Bash(curl -s --max-time 5 http://localhost:3001/)",
-      "PowerShell(netstat -ano)"
+      "PowerShell(netstat -ano)",
+      "Bash(node -e \"require\\('./src/routes/bq.routes.js'\\); console.log\\('bq.routes.js OK'\\);\")",
+      "Bash(git commit -m '@ *)"
     ]
   }
 }
