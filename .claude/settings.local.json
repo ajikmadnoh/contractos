@@ -25,7 +25,24 @@
       "Read(//tmp/**)",
       "Bash(curl -s -X POST http://localhost:5000/api/v1/auth/signup -H 'Content-Type: application/json' -d '{\"name\":\"Ahmad Razif\",\"email\":\"razif@contractos.my\",\"password\":\"Test1234!\",\"companyName\":\"Razif Construction Sdn Bhd\"}')",
       "Bash(curl -s -X POST http://localhost:5000/api/v1/auth/verify-email -H 'Content-Type: application/json' -d '{\"token\":\"ede8fe31-e3c9-4ece-87d9-7912e79d6c9e\"}')",
-      "Bash(curl -s -X POST http://localhost:5000/api/v1/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"razif@contractos.my\",\"password\":\"Test1234!\"}')"
+      "Bash(curl -s -X POST http://localhost:5000/api/v1/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"razif@contractos.my\",\"password\":\"Test1234!\"}')",
+      "Bash(node src/config/seed.js)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "Bash(docker start *)",
+      "Bash(pkill -f \"node src/server.js\")",
+      "Bash(pkill -f \"node src/server\")",
+      "Bash(pkill -f \"server.js\")",
+      "WebFetch(domain:api.anthropic.com)",
+      "Bash(cp \"C:\\\\Users\\\\m4db0x\\\\.claude\\\\projects\\\\D--Project-Web-Project-contractos\\\\e9cabc44-485f-4d44-9910-6ffcf1cbf16c\\\\tool-results\\\\webfetch-1780066292201-480pzr.bin\" /tmp/design.gz)",
+      "Bash(gunzip -f /tmp/design.gz)",
+      "Bash(tar xf *)",
+      "Bash(npx vite *)",
+      "Bash(curl -s http://localhost:3001)",
+      "Bash(curl -s http://localhost:5000/api/health)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://api.anthropic.com/v1/design/h/ALtUZZshz_EnAq3uEzg55A?open_file=ConstructOS.html\")",
+      "Bash(curl -sS -L \"https://api.anthropic.com/v1/design/h/ALtUZZshz_EnAq3uEzg55A?open_file=ConstructOS.html\" -w \"\\\\nHTTP_CODE:%{http_code}\\\\n\")",
+      "Bash(curl -s --max-time 5 http://localhost:3001/)",
+      "PowerShell(netstat -ano)"
     ]
   }
 }

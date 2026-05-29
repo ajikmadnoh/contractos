@@ -41,17 +41,21 @@ const ICONS = {
   clock:     'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zm0-14v4l3 3',
   refresh:   'M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15',
   copy:      'M20 9h-9a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2zM5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1',
+  trend:     'M3 17l6-6 4 4 8-8',
+  paperclip: 'm21 11-9.5 9.5a5.5 5.5 0 0 1-7.8-7.8l9-9a3.5 3.5 0 0 1 5 5L9 17a1.5 1.5 0 0 1-2.1-2.1L15 7',
+  weather:   'M16 13a4 4 0 1 0-7-3 3 3 0 1 0-1 5.8M9 19l-1 2M13 19l-1 2M17 19l-1 2',
   flow:      'M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3m8 0h3a2 2 0 0 0 2-2v-3',
   truck:     'M1 3h15v13H1zM16 8h4l3 3v5h-7V8zM5.5 21a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM18.5 21a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
   tool:      'M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z',
   target:    'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zm0-6a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0-2a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
   zap:       'M13 2L3 14h9l-1 8 10-12h-9l1-8z',
-  weather:   'M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z',
+  cloud:     'M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z',
 };
 
 export default function Icon({ name, size = 16, className = '', style = {} }) {
   const path = ICONS[name];
   if (!path) return null;
+  const paths = Array.isArray(path) ? path : [path];
   return (
     <svg
       width={size}
@@ -65,7 +69,7 @@ export default function Icon({ name, size = 16, className = '', style = {} }) {
       className={className}
       style={style}
     >
-      <path d={path} />
+      {paths.map((d, i) => <path key={i} d={d} />)}
     </svg>
   );
 }

@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import api from '../../lib/api';
+import Icon from '../../components/Icon';
 
 const TABS = [
-  { id: 'items', label: 'Items', icon: '📦' },
-  { id: 'transactions', label: 'In / Out Log', icon: '📋' },
+  { id: 'items', label: 'Items', icon: 'inventory' },
+  { id: 'transactions', label: 'In / Out Log', icon: 'doc' },
 ];
 
 const CATEGORIES = ['All', 'Building Materials', 'Steel & Metal', 'Electrical', 'Plumbing', 'Hardware', 'Tools', 'Safety Equipment', 'Consumables', 'Other'];
@@ -25,7 +26,7 @@ export default function InventoryPage() {
       <div className="tabs">
         {TABS.map(t => (
           <button key={t.id} className={`tab${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
-            {t.icon} {t.label}
+            <Icon name={t.icon} size={14} /> {t.label}
           </button>
         ))}
       </div>
@@ -42,19 +43,24 @@ function InventorySummary() {
   const items = data?.items || [];
   const lowStock = items.filter(i => i.quantity <= (i.reorder_level || 0));
   const totalValue = items.reduce((s, i) => s + parseFloat(i.quantity || 0) * parseFloat(i.unit_cost || 0), 0);
+  const stats = [
+    { label: 'Total Items', value: items.length, icon: 'inventory', color: 'var(--accent)' },
+    { label: 'Low Stock Alerts', value: lowStock.length, icon: 'alert', color: lowStock.length > 0 ? 'var(--warn)' : 'var(--good)' },
+    { label: 'Total Stock Value', value: 'RM ' + totalValue.toLocaleString('en-MY', { maximumFractionDigits: 0 }), icon: 'money', color: 'var(--text)' },
+    { label: 'Categories', value: new Set(items.map(i => i.category).filter(Boolean)).size, icon: 'market', color: 'var(--info)' },
+  ];
   return (
-    <div className="grid grid-cols-4 gap-4 mb-6">
-      {[
-        { label: 'Total Items', value: items.length, icon: '📦' },
-        { label: 'Low Stock Alerts', value: lowStock.length, icon: '⚠️', cls: lowStock.length > 0 ? 'text-yellow-400' : 'text-success' },
-        { label: 'Total Stock Value', value: 'RM ' + totalValue.toLocaleString('en-MY', { maximumFractionDigits: 0 }), icon: '💰' },
-        { label: 'Categories', value: new Set(items.map(i => i.category).filter(Boolean)).size, icon: '🏷️' },
-      ].map(c => (
-        <div key={c.label} className="card">
-          <p className="text-gray-400 text-xs mb-1">{c.icon} {c.label}</p>
-          <p className={`text-2xl font-bold ${c.cls || 'text-white'}`}>{c.value}</p>
-        </div>
-      ))}
+    <div className="kpi-strip">
+      <div className="kpi-grid">
+        {stats.map(s => (
+          <div key={s.label} className="kpi">
+            <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icon name={s.icon} size={13} className="ico" style={{ color: s.color }} /> {s.label}
+            </div>
+            <div className="kpi-value" style={{ color: s.color }}>{s.value}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

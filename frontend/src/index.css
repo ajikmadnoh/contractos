@@ -382,9 +382,20 @@ body {
 /* ─── KPI TILES ───────────────────────────────────────────────────────────── */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--gap);
 }
+
+/* Module summary strip — KPI grid placed directly under the page header,
+   needs the same horizontal padding as .page-body so it never clips. */
+.kpi-strip {
+  padding: 20px 32px 0;
+}
+.kpi-strip .kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1280px) {
+  .kpi-strip .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.kpi .kpi-label .ico { flex-shrink: 0; }
 
 .kpi {
   background: var(--surface);
@@ -864,3 +875,171 @@ select.input, select.input-field {
   max-width: 400px;
   box-shadow: 0 4px 24px rgba(0,0,0,0.06);
 }
+
+/* ─── DESIGN TOKEN ADDITIONS (matching ConstructOS.html) ──────────────────── */
+:root {
+  --gap: 12px;
+  --gap-tight: 8px;
+  --row-h: 40px;
+  --pad-x: 16px;
+  --pad-y: 12px;
+  --font-base: 14px;
+  --font-sm: 12.5px;
+  --font-xs: 11px;
+  --shadow-sm: 0 1px 0 rgba(11,19,32,.04), 0 1px 2px rgba(11,19,32,.04);
+  --shadow-md: 0 1px 0 rgba(11,19,32,.04), 0 6px 16px -8px rgba(11,19,32,.16);
+  --shadow-lg: 0 1px 0 rgba(11,19,32,.04), 0 24px 48px -16px rgba(11,19,32,.18);
+  --shadow-pop: 0 0 0 .5px rgba(11,19,32,.08), 0 12px 32px -8px rgba(11,19,32,.16), 0 2px 4px rgba(11,19,32,.05);
+}
+
+/* ─── ANIMATED REVEAL ─────────────────────────────────────────────────────── */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+.rise { animation: rise .4s cubic-bezier(.22,.8,.25,1) both; }
+@media (prefers-reduced-motion: reduce) { .rise { animation: none; } }
+.rise-1 { animation-delay: .04s; }
+.rise-2 { animation-delay: .08s; }
+.rise-3 { animation-delay: .12s; }
+.rise-4 { animation-delay: .16s; }
+.rise-5 { animation-delay: .20s; }
+.rise-6 { animation-delay: .24s; }
+
+/* ─── KPI DRAG/DROP ───────────────────────────────────────────────────────── */
+.kpi { cursor: grab; position: relative; overflow: hidden; }
+.kpi:active { cursor: grabbing; }
+.kpi[data-dragging="true"] { opacity: .4; }
+.kpi[data-dragover="true"]::before {
+  content: "";
+  position: absolute; inset: 0;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius-lg);
+  pointer-events: none;
+}
+
+/* ─── DELTA ───────────────────────────────────────────────────────────────── */
+.delta { display: inline-flex; align-items: center; gap: 2px; font-weight: 600; font-size: 11px; }
+.delta.up   { color: var(--good); }
+.delta.down { color: var(--danger); }
+
+/* ─── CHART LEGEND ────────────────────────────────────────────────────────── */
+.chart-legend {
+  display: flex; gap: 14px; font-size: 11.5px; color: var(--text-dim);
+}
+.chart-legend-item {
+  display: inline-flex; align-items: center; gap: 6px;
+}
+
+/* ─── SCROLLBAR (main area) ───────────────────────────────────────────────── */
+.main::-webkit-scrollbar { width: 12px; height: 12px; }
+.main::-webkit-scrollbar-track { background: transparent; }
+.main::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; border: 3px solid var(--bg); }
+.main::-webkit-scrollbar-thumb:hover { background: var(--text-mute); }
+
+/* ─── PILL OUTLINE ────────────────────────────────────────────────────────── */
+.pill.outline { background: transparent; border: 1px solid var(--border); color: var(--text-dim); }
+
+/* ─── MINI BAR ────────────────────────────────────────────────────────────── */
+.mini-bar {
+  display: block; height: 6px; border-radius: 999px;
+  background: var(--bg-2); overflow: hidden;
+}
+.mini-bar > i {
+  display: block; height: 100%; background: var(--accent);
+  transition: width .8s cubic-bezier(.22,.8,.25,1);
+}
+
+/* ─── DASHBOARD GRID HELPERS ──────────────────────────────────────────────── */
+/* Scoped to .dash-page so other modules keep their own page-body layout. */
+.dash-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+/* KPI strip: exactly 4 equal columns that fill the row (no phantom track),
+   sharing the same gap as the card grid below for vertical/horizontal rhythm. */
+.dash-page .kpi-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--gap);
+}
+
+/* Two-column dashboard body: a flexible main column + a fixed side column.
+   Each column packs its cards tightly top-to-bottom, so a short card never
+   leaves a floating gap beside a tall neighbour. */
+.dash-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: var(--gap);
+  align-items: start;
+}
+.dash-main,
+.dash-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+/* Side-by-side pair of compact stat cards inside the main column. */
+.dash-duo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap);
+  align-items: start;
+}
+.dash-cols .card { width: 100%; }
+
+/* Responsive: collapse the dashboard grids gracefully on narrower viewports. */
+@media (max-width: 1280px) {
+  .dash-page .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 1080px) {
+  .dash-cols { grid-template-columns: 1fr; }
+  .dash-duo  { grid-template-columns: 1fr; }
+}
+
+/* ─── DASHBOARD PAGE HEADER ───────────────────────────────────────────────── */
+.page-head h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+.page-head .sub { color: var(--text-dim); font-size: var(--font-sm); margin-top: 4px; }
+.page-head .actions { display: flex; align-items: center; gap: 8px; }
+
+/* ─── BRAND MARK (design system) ──────────────────────────────────────────── */
+.brand-mark-svg {
+  width: 28px; height: 28px;
+  background: var(--text);
+  color: var(--bg);
+  border-radius: 7px;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.brand-mark-svg svg { width: 16px; height: 16px; }
+
+/* ─── SIDEBAR BRAND NAME ──────────────────────────────────────────────────── */
+.brand-name-wrap {
+  font-weight: 700; letter-spacing: -0.01em; font-size: 15px;
+  display: flex; flex-direction: column; line-height: 1.1;
+}
+.brand-name-wrap small { font-size: 10px; font-weight: 500; color: var(--text-dim); letter-spacing: .04em; }
+
+/* ─── DIARY CARD ──────────────────────────────────────────────────────────── */
+.diary-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ─── UTILISATION LEGEND ──────────────────────────────────────────────────── */
+.util-legend {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.util-legend-row {
+  display: flex; align-items: center; gap: 8px; font-size: 12px;
+}
+

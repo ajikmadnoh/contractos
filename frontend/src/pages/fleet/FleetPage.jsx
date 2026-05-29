@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import api from '../../lib/api';
+import Icon from '../../components/Icon';
 
 const TABS = [
-  { id: 'vehicles', label: 'Vehicles', icon: '🚛' },
-  { id: 'maintenance', label: 'Maintenance', icon: '🔧' },
+  { id: 'vehicles', label: 'Vehicles', icon: 'truck' },
+  { id: 'maintenance', label: 'Maintenance', icon: 'tool' },
 ];
 
 const STATUS_STYLES = {
@@ -30,7 +31,7 @@ export default function FleetPage() {
       <div className="tabs">
         {TABS.map(t => (
           <button key={t.id} className={`tab${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
-            {t.icon} {t.label}
+            <Icon name={t.icon} size={14} /> {t.label}
           </button>
         ))}
       </div>
@@ -48,19 +49,24 @@ function FleetSummary() {
     queryFn: () => api.get('/fleet/vehicles').then(r => r.data),
   });
   const vehicles = data?.vehicles || [];
+  const stats = [
+    { label: 'Total Fleet', value: vehicles.length, icon: 'truck', color: 'var(--accent)' },
+    { label: 'Available', value: vehicles.filter(v => v.status === 'available').length, icon: 'check', color: 'var(--good)' },
+    { label: 'In Use', value: vehicles.filter(v => v.status === 'in_use').length, icon: 'refresh', color: 'var(--info)' },
+    { label: 'Under Maintenance', value: vehicles.filter(v => v.status === 'maintenance').length, icon: 'tool', color: 'var(--warn)' },
+  ];
   return (
-    <div className="grid grid-cols-4 gap-4 mb-6">
-      {[
-        { label: 'Total Fleet', value: vehicles.length, icon: '🚛' },
-        { label: 'Available', value: vehicles.filter(v => v.status === 'available').length, icon: '✅', cls: 'text-success' },
-        { label: 'In Use', value: vehicles.filter(v => v.status === 'in_use').length, icon: '🔄', cls: 'text-blue-400' },
-        { label: 'Under Maintenance', value: vehicles.filter(v => v.status === 'maintenance').length, icon: '🔧', cls: 'text-yellow-400' },
-      ].map(c => (
-        <div key={c.label} className="card">
-          <p className="text-gray-400 text-xs mb-1">{c.icon} {c.label}</p>
-          <p className={`text-2xl font-bold ${c.cls || 'text-white'}`}>{c.value}</p>
-        </div>
-      ))}
+    <div className="kpi-strip">
+      <div className="kpi-grid">
+        {stats.map(s => (
+          <div key={s.label} className="kpi">
+            <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icon name={s.icon} size={13} className="ico" style={{ color: s.color }} /> {s.label}
+            </div>
+            <div className="kpi-value" style={{ color: s.color }}>{s.value}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
