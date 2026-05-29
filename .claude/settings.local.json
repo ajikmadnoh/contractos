@@ -12,7 +12,9 @@
       "Bash(npm run *)",
       "Bash(curl -s http://localhost:3000)",
       "mcp__Claude_Preview__preview_start",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git config *)"
     ]
   }
 }
