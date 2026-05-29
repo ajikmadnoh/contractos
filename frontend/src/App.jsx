@@ -15,6 +15,12 @@ import BQPage from './pages/bq/BQPage';
 import ProfilesPage from './pages/profiles/ProfilesPage';
 import UserManagementPage from './pages/users/UserManagementPage';
 import SettingsPage from './pages/settings/SettingsPage';
+import SafetyPage from './pages/safety/SafetyPage';
+import CRMPage from './pages/crm/CRMPage';
+import FleetPage from './pages/fleet/FleetPage';
+import MarketRatesPage from './pages/rates/MarketRatesPage';
+import InventoryPage from './pages/inventory/InventoryPage';
+import DocumentsPage from './pages/documents/DocumentsPage';
 import DashboardLayout from './layouts/DashboardLayout';
 
 const PrivateRoute = ({ children }) => {
@@ -48,6 +54,12 @@ export default function App() {
         <Route path="profiles" element={<ProfilesPage />} />
         <Route path="users" element={<UserManagementPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="safety" element={<SafetyPage />} />
+        <Route path="crm" element={<CRMPage />} />
+        <Route path="fleet" element={<FleetPage />} />
+        <Route path="rates" element={<MarketRatesPage />} />
+        <Route path="inventory" element={<InventoryPage />} />
+        <Route path="documents" element={<DocumentsPage />} />
       </Route>
 
       {/* Catch-all */}
