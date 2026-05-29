@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import api from '../../lib/api';
+import Icon from '../../components/Icon';
+
+const fieldError = { fontSize: 'var(--font-xs)', color: 'var(--danger)' };
 
 export default function SignupPage() {
   const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm();
@@ -26,108 +29,156 @@ export default function SignupPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-navy-dark flex items-center justify-center px-4">
-        <div className="card max-w-md w-full text-center">
-          <div className="text-5xl mb-4">✉️</div>
-          <h2 className="text-xl font-bold text-white mb-2">Check your email</h2>
-          <p className="text-gray-400 text-sm mb-6">
-            We sent a verification link to your email. Click it to activate your account.
-          </p>
-          <Link to="/login" className="btn-primary inline-block">Back to Login</Link>
+      <div className="login-page">
+        <div style={{ width: '100%', maxWidth: '400px' }}>
+          <div className="login-card" style={{ textAlign: 'center' }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: 14, margin: '0 auto 16px',
+              background: 'var(--accent-soft)', color: 'var(--accent)',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Icon name="check" size={26} />
+            </div>
+            <h2 style={{ fontSize: 'var(--font-xl)', fontWeight: 700, color: 'var(--text)', marginBottom: '6px' }}>
+              Check your email
+            </h2>
+            <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-dim)', marginBottom: '24px', lineHeight: 1.5 }}>
+              We sent a verification link to your email. Click it to activate your account.
+            </p>
+            <Link to="/login" className="btn primary" style={{ width: '100%', justifyContent: 'center' }}>
+              Back to Sign In
+            </Link>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-navy-dark flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <Link to="/" className="text-gold font-bold text-3xl tracking-wide">ContractOS</Link>
-          <p className="text-gray-400 mt-2 text-sm">Create your company workspace</p>
+    <div className="login-page">
+      <div style={{ width: '100%', maxWidth: '400px' }}>
+        {/* Brand */}
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+            <div className="brand-mark" style={{ width: '36px', height: '36px', fontSize: '18px', borderRadius: '10px' }}>C</div>
+            <span style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.5px' }}>ContractOS</span>
+          </div>
+          <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-dim)' }}>
+            Create your company workspace
+          </p>
         </div>
 
-        <div className="card">
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+        <div className="login-card">
+          <h2 style={{ fontSize: 'var(--font-xl)', fontWeight: 700, color: 'var(--text)', marginBottom: '4px' }}>
+            Get started free
+          </h2>
+          <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-dim)', marginBottom: '24px' }}>
+            Set up your workspace in under a minute
+          </p>
+
+          <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {serverError && (
-              <div className="bg-danger bg-opacity-20 border border-danger border-opacity-50 text-red-300 text-sm px-4 py-3 rounded-lg">
+              <div style={{
+                background: 'var(--danger-soft)',
+                border: '1px solid var(--danger)',
+                color: 'var(--danger)',
+                fontSize: 'var(--font-sm)',
+                padding: '10px 14px',
+                borderRadius: 'var(--radius)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}>
+                <Icon name="alert" size={14} />
                 {serverError}
               </div>
             )}
 
-            <div>
+            <div className="form-group">
               <label className="label">Your Full Name</label>
               <input
                 type="text"
                 placeholder="Ahmad bin Abdullah"
-                className="input-field"
+                className="input"
                 {...register('name', { required: 'Name is required' })}
               />
-              {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name.message}</p>}
+              {errors.name && <span style={fieldError}>{errors.name.message}</span>}
             </div>
 
-            <div>
+            <div className="form-group">
               <label className="label">Company Name</label>
               <input
                 type="text"
                 placeholder="Syarikat Binaan Sdn Bhd"
-                className="input-field"
+                className="input"
                 {...register('companyName', { required: 'Company name is required' })}
               />
-              {errors.companyName && <p className="text-red-400 text-xs mt-1">{errors.companyName.message}</p>}
+              {errors.companyName && <span style={fieldError}>{errors.companyName.message}</span>}
             </div>
 
-            <div>
+            <div className="form-group">
               <label className="label">Work Email</label>
               <input
                 type="email"
                 placeholder="you@company.com"
-                className="input-field"
+                className="input"
                 {...register('email', { required: 'Email is required', pattern: { value: /^\S+@\S+\.\S+$/, message: 'Invalid email address' } })}
               />
-              {errors.email && <p className="text-red-400 text-xs mt-1">{errors.email.message}</p>}
+              {errors.email && <span style={fieldError}>{errors.email.message}</span>}
             </div>
 
-            <div>
+            <div className="form-group">
               <label className="label">Password</label>
               <input
                 type="password"
                 placeholder="At least 8 characters"
-                className="input-field"
+                className="input"
                 {...register('password', { required: 'Password is required', minLength: { value: 8, message: 'Minimum 8 characters' } })}
               />
-              {errors.password && <p className="text-red-400 text-xs mt-1">{errors.password.message}</p>}
+              {errors.password && <span style={fieldError}>{errors.password.message}</span>}
             </div>
 
-            <div>
+            <div className="form-group">
               <label className="label">Confirm Password</label>
               <input
                 type="password"
                 placeholder="Repeat your password"
-                className="input-field"
+                className="input"
                 {...register('confirmPassword', {
                   required: 'Please confirm your password',
                   validate: (val) => val === watch('password') || 'Passwords do not match',
                 })}
               />
-              {errors.confirmPassword && <p className="text-red-400 text-xs mt-1">{errors.confirmPassword.message}</p>}
+              {errors.confirmPassword && <span style={fieldError}>{errors.confirmPassword.message}</span>}
             </div>
 
-            <p className="text-xs text-gray-500">
+            <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-dim)', lineHeight: 1.5 }}>
               By signing up, you agree to our{' '}
-              <Link to="/terms" className="text-gold hover:underline">Terms of Service</Link> and{' '}
-              <Link to="/privacy" className="text-gold hover:underline">Privacy Policy</Link>.
+              <Link to="/terms" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Terms of Service</Link> and{' '}
+              <Link to="/privacy" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Privacy Policy</Link>.
             </p>
 
-            <button type="submit" disabled={isSubmitting} className="btn-primary w-full">
-              {isSubmitting ? 'Creating account...' : 'Create Free Account'}
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="btn primary"
+              style={{ width: '100%', justifyContent: 'center', marginTop: '4px' }}
+            >
+              {isSubmitting ? 'Creating account…' : 'Create Free Account'}
             </button>
           </form>
 
-          <p className="text-center text-sm text-gray-400 mt-6">
-            Already have an account?{' '}
-            <Link to="/login" className="text-gold hover:text-gold-light font-medium">Sign in</Link>
-          </p>
+          <div style={{ marginTop: '20px', textAlign: 'center' }}>
+            <span style={{ fontSize: 'var(--font-sm)', color: 'var(--text-dim)' }}>
+              Already have an account?{' '}
+            </span>
+            <Link
+              to="/login"
+              style={{ fontSize: 'var(--font-sm)', color: 'var(--accent)', fontWeight: 600, textDecoration: 'none' }}
+            >
+              Sign in
+            </Link>
+          </div>
         </div>
       </div>
     </div>
