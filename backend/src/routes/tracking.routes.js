@@ -11,6 +11,7 @@ const { ROLES } = require('../config/constants');
 const { query, getClient } = require('../config/database');
 const { v4: uuidv4 } = require('uuid');
 const track = require('../services/siteTrackingService');
+const automation = require('../services/automationService');
 
 const canManage = authorize(ROLES.DIRECTOR, ROLES.ADMIN, ROLES.PM, ROLES.QS);
 
@@ -58,22 +59,14 @@ router.post('/:id/import-bq/:bqId', authenticate, canManage, async (req, res, ne
     client = await getClient();
     await client.query('BEGIN');
     // Insert items not already imported (uniq index on project_id, bq_item_id).
-    const result = await client.query(
-      `INSERT INTO project_scope
-         (id, tenant_id, project_id, bq_id, bq_item_id, item_code, section, description, unit, contract_qty, unit_rate, amount, sort_order)
-       SELECT uuid_generate_v4(), $1, $2, $3, i.id, i.item_code, i.section, i.description, i.unit,
-              i.quantity, i.unit_rate, COALESCE(i.amount,0), i.sort_order
-       FROM bq_items i
-       WHERE i.bq_id=$3
-       ON CONFLICT (project_id, bq_item_id) WHERE bq_item_id IS NOT NULL DO NOTHING
-       RETURNING id`,
-      [req.user.tenant_id, req.params.id, req.params.bqId]
+    const imported = await automation.importBqScope(
+      req.params.bqId, req.params.id, req.user.tenant_id, client.query.bind(client)
     );
     await client.query('COMMIT');
     await track.recomputeProjectProgress(req.params.id);
     const warn = bq.status !== 'approved'
       ? `Imported from a ${bq.status} BQ — values may still change.` : null;
-    res.json({ imported: result.rowCount, warning: warn });
+    res.json({ imported, warning: warn });
   } catch (err) {
     if (client) { try { await client.query('ROLLBACK'); } catch (_) {} }
     next(err);

@@ -4,8 +4,10 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { ROLES } = require('../config/constants');
 const { query } = require('../config/database');
 const { v4: uuidv4 } = require('uuid');
+const automation = require('../services/automationService');
 
 const n = (v) => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
+const fmtRM = (v) => `RM ${n(v).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 // Build a progress claim from project_scope: value done to date per line, net of
 // what prior non-rejected claims already billed against that scope line.
@@ -176,8 +178,8 @@ router.patch('/claims/:id/status', authenticate, authorize(ROLES.DIRECTOR, ROLES
     if (result.rows.length === 0) return res.status(404).json({ error: 'Claim not found.' });
 
     // Auto-create payment cert when claim is certified
+    const claim = result.rows[0];
     if (status === 'certified') {
-      const claim = result.rows[0];
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + 30);
       await query(
@@ -185,6 +187,19 @@ router.patch('/claims/:id/status', authenticate, authorize(ROLES.DIRECTOR, ROLES
          VALUES ($1,$2,$3,$4,$5,NOW(),$6,$7)`,
         [uuidv4(), req.user.tenant_id, claim.project_id, claim.id, `CERT-${Date.now().toString().slice(-6)}`, claim.net_amount, dueDate.toISOString().split('T')[0]]
       );
+      await automation.notifyProjectStakeholders(claim.project_id, [ROLES.DIRECTOR, ROLES.FINANCE], {
+        tenantId: req.user.tenant_id,
+        title: 'Claim certified',
+        message: `Claim ${claim.claim_number} certified — payment cert raised for ${fmtRM(claim.net_amount)} (due in 30 days).`,
+        type: 'success', link: '/finance',
+      });
+    }
+    if (status === 'paid') {
+      await automation.notifyRoles([ROLES.DIRECTOR, ROLES.FINANCE], {
+        tenantId: req.user.tenant_id, title: 'Claim paid',
+        message: `Claim ${claim.claim_number} marked paid (${fmtRM(claim.amount)}).`,
+        type: 'success', link: '/finance',
+      });
     }
     res.json(result.rows[0]);
   } catch (err) { next(err); }
@@ -249,8 +264,23 @@ router.post('/payment-certs/:id/invoice', authenticate, authorize(ROLES.DIRECTOR
       );
       await query('UPDATE payment_certificates SET invoiced=TRUE WHERE id=$1', [cert.id]);
       await query('COMMIT');
+      await automation.notifyRoles([ROLES.DIRECTOR, ROLES.FINANCE], {
+        tenantId: req.user.tenant_id, title: 'Invoice raised',
+        message: `${invoiceNumber} (${fmtRM(subtotal)}) raised from cert ${cert.cert_number}.`,
+        type: 'info', link: '/invoicing',
+      });
       res.status(201).json(inv.rows[0]);
     } catch (e) { await query('ROLLBACK'); throw e; }
+  } catch (err) { next(err); }
+});
+
+// POST /finance/run-aging — sweep overdue certs/invoices for this tenant.
+// Also runs automatically on a daily timer (see server.js); exposed for manual
+// refresh from the Finance cockpit.
+router.post('/run-aging', authenticate, authorize(ROLES.DIRECTOR, ROLES.ADMIN, ROLES.FINANCE), async (req, res, next) => {
+  try {
+    const result = await automation.runAging(req.user.tenant_id);
+    res.json(result);
   } catch (err) { next(err); }
 });
 

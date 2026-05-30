@@ -58,4 +58,15 @@ app.listen(PORT, () => {
   console.log(`ContractOS API running on port ${PORT} [${process.env.NODE_ENV || 'development'}]`);
 });
 
+// Daily status-aging sweep: flag overdue certs/invoices across all tenants and
+// notify finance. Runs ~5s after boot then every 24h. Disable with AGING_JOB=off.
+if (process.env.AGING_JOB !== 'off') {
+  const { runAging } = require('./services/automationService');
+  const sweep = () => runAging()
+    .then(r => { if (r.certsOverdue || r.invoicesOverdue) console.log(`[aging] flagged ${r.certsOverdue} cert(s), ${r.invoicesOverdue} invoice(s) overdue`); })
+    .catch(e => console.error('[aging] sweep failed:', e.message));
+  setTimeout(sweep, 5000);
+  setInterval(sweep, 24 * 60 * 60 * 1000).unref();
+}
+
 module.exports = app;

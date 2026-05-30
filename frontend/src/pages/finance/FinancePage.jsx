@@ -25,6 +25,7 @@ const TABS = [
 
 export default function FinancePage() {
   const [tab, setTab] = useState('cockpit');
+  const [aging, setAging] = useState(false);
   const qc = useQueryClient();
 
   const { data: claims = [] } = useQuery({
@@ -54,7 +55,17 @@ export default function FinancePage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="btn ghost sm"><Icon name="download" size={14} /> Export</button>
+          <button className="btn ghost sm" disabled={aging} onClick={async () => {
+            setAging(true);
+            try {
+              const r = await api.post('/finance/run-aging').then(x => x.data);
+              qc.invalidateQueries(['payment-certs']); qc.invalidateQueries(['claims']); qc.invalidateQueries(['notifications']);
+              alert(`Aging swept: ${r.certsOverdue} cert(s), ${r.invoicesOverdue} invoice(s) now overdue.`);
+            } catch (e) { alert(e.response?.data?.error || 'Failed.'); }
+            finally { setAging(false); }
+          }}>
+            <Icon name="clock" size={14} /> {aging ? 'Checking…' : 'Check Overdue'}
+          </button>
           <button className="btn primary sm" onClick={() => setTab('claims')}>
             <Icon name="plus" size={14} /> New Claim
           </button>

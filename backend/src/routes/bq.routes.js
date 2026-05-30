@@ -10,6 +10,8 @@ const { v4: uuidv4 } = require('uuid');
 const bqExtractor = require('../services/bqExtractor');
 const bqExport = require('../services/bqExport');
 const svc = require('../services/bqService');
+const track = require('../services/siteTrackingService');
+const automation = require('../services/automationService');
 
 const EDIT_ROLES = [ROLES.DIRECTOR, ROLES.ADMIN, ROLES.QS, ROLES.PM];
 const APPROVE_ROLES = [ROLES.DIRECTOR, ROLES.ADMIN];
@@ -249,7 +251,33 @@ router.post('/:id/transition', authenticate, authorize(...EDIT_ROLES), async (re
     params.push(req.params.id);
     const updated = await query(`UPDATE bq_documents SET ${sets.join(', ')} WHERE id=$${params.length} RETURNING *`, params);
     await svc.audit({ bqId: req.params.id, tenantId: req.user.tenant_id, userId: req.user.id, action: 'status_changed', fromStatus: bq.status, toStatus: to, detail: note ? { note } : null });
-    res.json(updated.rows[0]);
+
+    // Automation on approval: auto-import items into the linked project's scope
+    // (so PMO/site tracking is ready immediately) and notify stakeholders.
+    let autoImported = 0;
+    if (to === 'approved') {
+      try {
+        if (updated.rows[0].project_id) {
+          autoImported = await automation.importBqScope(req.params.id, updated.rows[0].project_id, req.user.tenant_id);
+          await track.recomputeProjectProgress(updated.rows[0].project_id);
+          await automation.notifyProjectStakeholders(updated.rows[0].project_id, [ROLES.QS, ROLES.FINANCE], {
+            tenantId: req.user.tenant_id,
+            title: 'BQ approved',
+            message: `"${updated.rows[0].title}" was approved${autoImported ? ` and ${autoImported} item(s) imported into project scope` : ''}.`,
+            type: 'success',
+            link: `/projects/${updated.rows[0].project_id}`,
+          });
+        } else {
+          await automation.notifyRoles([ROLES.QS, ROLES.FINANCE], {
+            tenantId: req.user.tenant_id,
+            title: 'BQ approved',
+            message: `"${updated.rows[0].title}" was approved. Link it to a project to start tracking.`,
+            type: 'success', link: '/bq',
+          });
+        }
+      } catch (e) { console.error('[automation] BQ-approve hook failed:', e.message); }
+    }
+    res.json({ ...updated.rows[0], autoImported });
   } catch (err) { next(err); }
 });
 
