@@ -55,6 +55,7 @@ export default function FinancePage() {
   const { data: liveCerts = [] } = useQuery({ queryKey: ['payment-certs'], queryFn: () => api.get('/finance/payment-certs').then(r => r.data).catch(() => []) });
   const { data: bonds = [] } = useQuery({ queryKey: ['fin-bonds'], queryFn: () => api.get('/finance/bonds').then(r => r.data).catch(() => []) });
   const { data: statutory = [] } = useQuery({ queryKey: ['fin-statutory'], queryFn: () => api.get('/finance/statutory').then(r => r.data).catch(() => []) });
+  const { data: retention = [] } = useQuery({ queryKey: ['fin-retention'], queryFn: () => api.get('/finance/retention').then(r => r.data).catch(() => []) });
 
   const certs = (liveCerts || []).map(mapCert);
 
@@ -110,10 +111,10 @@ export default function FinancePage() {
       {showNewPC && <NewPCModal onClose={() => setShowNewPC(false)} />}
 
       <div className="page-body" style={{ paddingTop: 12 }}>
-        {tab === 'cockpit' && <FinanceCockpit live={cockpit || {}} statutory={statutory} />}
+        {tab === 'cockpit' && <FinanceCockpit live={cockpit || {}} statutory={statutory} matrix={aging} />}
         {tab === 'ar'      && <FinanceReceivables matrix={aging} dunning={dunning} onSendAll={sendAllReminders} />}
         {tab === 'certs'   && <FinancePaymentCerts certs={certs} />}
-        {tab === 'retent'  && <FinanceRetention bonds={bonds} />}
+        {tab === 'retent'  && <FinanceRetention ledger={retention} bonds={bonds} />}
         {tab === 'einv'    && <FinanceMyInvois />}
       </div>
     </div>

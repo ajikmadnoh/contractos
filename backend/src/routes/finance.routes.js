@@ -371,17 +371,20 @@ router.get('/payment-certs/:id/pdf', authenticate, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /finance/retention — per-project retention held
+// GET /finance/retention — per-project retention held, with PC/DLP dates for timeline
 router.get('/retention', authenticate, async (req, res, next) => {
   try {
     const result = await query(
       `SELECT p.id AS project_id, p.name AS project_name, p.retention_percentage,
+              p.contract_sum,
+              COALESCE(p.actual_completion_date, p.end_date) AS pc_date,
+              (COALESCE(p.actual_completion_date, p.end_date) + INTERVAL '12 months')::DATE AS dlp_date,
               COALESCE(SUM(c.retention_amount) FILTER (WHERE c.status NOT IN ('rejected','draft')), 0) AS retention_held,
               COUNT(c.id) FILTER (WHERE c.status NOT IN ('rejected','draft')) AS claim_count
        FROM projects p
        LEFT JOIN claims c ON c.project_id = p.id AND c.tenant_id = p.tenant_id
        WHERE p.tenant_id = $1 AND p.status NOT IN ('cancelled')
-       GROUP BY p.id, p.name, p.retention_percentage
+       GROUP BY p.id, p.name, p.retention_percentage, p.contract_sum, p.actual_completion_date, p.end_date
        ORDER BY retention_held DESC`,
       [req.user.tenant_id]
     );

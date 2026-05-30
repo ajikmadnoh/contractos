@@ -5,8 +5,35 @@ import Icon from '../../components/Icon';
 import { Legend, fmtShort, fmtDateLong } from './finCharts';
 import { RETENTIONS, BONDS } from './finData';
 
+// Map a live /finance/retention row to the shape the ledger + timeline components expect.
+function mapRetentionRow(r) {
+  const held = Number(r.retention_held || 0);
+  const retPct = Number(r.retention_percentage || 5) / 100;
+  const contract = Number(r.contract_sum || 0);
+  // Retention cap = retention% × contract. Fallback: infer from held if contract unknown.
+  const cap = contract > 0 ? contract * retPct : held * 1.5;
+  const code = (r.project_name || 'PROJ').split(/[\s—-]/)[0].slice(0, 7).toUpperCase();
+  // Dates: pc_date is practical completion; dlp_date is 12 months later.
+  // Ensure we always have valid 'YYYY-MM-DD' strings (fallback to 1 year from now).
+  const fallbackPC  = new Date(); fallbackPC.setFullYear(fallbackPC.getFullYear() + 1);
+  const fallbackDLP = new Date(); fallbackDLP.setFullYear(fallbackDLP.getFullYear() + 2);
+  const toYMD = (d) => d ? String(d).slice(0, 10) : null;
+  const halfRelease  = toYMD(r.pc_date)  || fallbackPC.toISOString().slice(0, 10);
+  const finalRelease = toYMD(r.dlp_date) || fallbackDLP.toISOString().slice(0, 10);
+  // Phase: 'releasing' if we're past PC but before DLP; 'pc-soon' if PC within 90d
+  const today = new Date();
+  const pcTime  = new Date(halfRelease).getTime();
+  const dlpTime = new Date(finalRelease).getTime();
+  const daysToPC = Math.round((pcTime - today.getTime()) / 86400000);
+  let phase = 'ok';
+  if (daysToPC < 0 && dlpTime > today.getTime()) phase = 'releasing';
+  else if (daysToPC >= 0 && daysToPC < 90) phase = 'pc-soon';
+  return { code, project: r.project_name, contract, held, cap, halfRelease, finalRelease, phase };
+}
+
 export default function FinanceRetention({ ledger, bonds }) {
-  const rows = ledger && ledger.length ? ledger : RETENTIONS;
+  const liveRows = ledger && ledger.length ? ledger.map(mapRetentionRow) : null;
+  const rows = liveRows || RETENTIONS;
   const bondList = bonds && bonds.length ? bonds : BONDS;
   const totalHeld = rows.reduce((s, r) => s + r.held, 0);
   const totalCap = rows.reduce((s, r) => s + r.cap, 0) || 1;

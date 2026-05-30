@@ -5,7 +5,7 @@ import Icon from '../../components/Icon';
 import { KpiTile, Sparkline, Legend, fmtShort, fmtNum, fmtDateShort } from './finCharts';
 import { AR_MATRIX, CASHFLOW_13W, CASH_BALANCE_START, STATUTORY } from './finData';
 
-export default function FinanceCockpit({ live = {}, statutory }) {
+export default function FinanceCockpit({ live = {}, statutory, matrix }) {
   const rows = statutory && statutory.length ? statutory : STATUTORY;
   const k = live.kpis || {};
   return (
@@ -44,7 +44,7 @@ export default function FinanceCockpit({ live = {}, statutory }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 'var(--gap)' }}>
         <div className="card rise rise-3" style={{ gridColumn: 'span 5' }}>
           <div className="card-head"><h3>Top exposures</h3><span className="sub">By client · outstanding + risk score</span></div>
-          <div className="card-body" style={{ padding: 0 }}><TopExposures /></div>
+          <div className="card-body" style={{ padding: 0 }}><TopExposures matrix={matrix} /></div>
         </div>
         <div className="card rise rise-4" style={{ gridColumn: 'span 4' }}>
           <div className="card-head"><h3>DSO trend by project</h3><span className="sub">Days sales outstanding · last 6 months</span></div>
@@ -164,9 +164,10 @@ function CashflowForecast() {
   );
 }
 
-function TopExposures() {
-  const tot = (r) => r.current + r.b1_30 + r.b31_60 + r.b61_90 + r.b90;
-  const sorted = [...AR_MATRIX].sort((a, b) => tot(b) - tot(a));
+function TopExposures({ matrix }) {
+  const tot = (r) => (r.current || 0) + (r.b1_30 || 0) + (r.b31_60 || 0) + (r.b61_90 || 0) + (r.b90 || 0);
+  const src = matrix && matrix.length ? matrix : AR_MATRIX;
+  const sorted = [...src].sort((a, b) => tot(b) - tot(a));
   const max = sorted.reduce((m, x) => Math.max(m, tot(x)), 0);
   return (
     <div>
