@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticate, authorize } = require('../middleware/auth');
 const { ROLES } = require('../config/constants');
-const { query } = require('../config/database');
+const { query, withTransaction } = require('../config/database');
 const { v4: uuidv4 } = require('uuid');
 
 // GET /invoices
@@ -46,26 +46,23 @@ router.post('/', authenticate, authorize(ROLES.DIRECTOR, ROLES.ADMIN, ROLES.FINA
     const taxAmount = subtotal * ((taxRate || 0) / 100);
     const total = subtotal + taxAmount;
 
-    await query('BEGIN');
-
-    const inv = await query(
-      `INSERT INTO invoices (id, tenant_id, project_id, client_id, invoice_number, invoice_date, due_date, currency, subtotal, tax_rate, tax_amount, total, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
-      [id, req.user.tenant_id, projectId, clientId, invoiceNumber, invoiceDate, dueDate, currency || 'MYR', subtotal, taxRate || 0, taxAmount, total, req.user.id]
-    );
-
-    for (let i = 0; i < (items || []).length; i++) {
-      const item = items[i];
-      await query(
-        'INSERT INTO invoice_items (id, invoice_id, description, quantity, unit_price, amount, sort_order) VALUES ($1,$2,$3,$4,$5,$6,$7)',
-        [uuidv4(), id, item.description, item.quantity, item.unitPrice, item.quantity * item.unitPrice, i]
+    const invoice = await withTransaction(async (q) => {
+      const inv = await q(
+        `INSERT INTO invoices (id, tenant_id, project_id, client_id, invoice_number, invoice_date, due_date, currency, subtotal, tax_rate, tax_amount, total, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+        [id, req.user.tenant_id, projectId, clientId, invoiceNumber, invoiceDate, dueDate, currency || 'MYR', subtotal, taxRate || 0, taxAmount, total, req.user.id]
       );
-    }
-
-    await query('COMMIT');
-    res.status(201).json(inv.rows[0]);
+      for (let i = 0; i < (items || []).length; i++) {
+        const item = items[i];
+        await q(
+          'INSERT INTO invoice_items (id, invoice_id, description, quantity, unit_price, amount, sort_order) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+          [uuidv4(), id, item.description, item.quantity, item.unitPrice, item.quantity * item.unitPrice, i]
+        );
+      }
+      return inv.rows[0];
+    });
+    res.status(201).json(invoice);
   } catch (err) {
-    await query('ROLLBACK');
     next(err);
   }
 });

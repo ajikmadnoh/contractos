@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticate, authorize } = require('../middleware/auth');
 const { ROLES } = require('../config/constants');
-const { query } = require('../config/database');
+const { query, withTransaction } = require('../config/database');
 const { v4: uuidv4 } = require('uuid');
 const automation = require('../services/automationService');
 const { buildClaimPdf, buildCertPdf } = require('../services/pdfService');
@@ -131,9 +131,8 @@ router.post('/claims/generate', authenticate, authorize(ROLES.DIRECTOR, ROLES.AD
 
     const claimNumber = `CLM-${Date.now().toString().slice(-6)}`;
     const id = uuidv4();
-    await query('BEGIN');
-    try {
-      await query(
+    await withTransaction(async (q) => {
+      await q(
         `INSERT INTO claims (id, tenant_id, project_id, claim_number, claim_type, claim_date, amount, retention_amount, net_amount, tax_rate, tax_amount, description, submitted_by, source, work_done_value, previous_value)
          VALUES ($1,$2,$3,$4,'progress',$5,$6,$7,$8,$9,$10,$11,$12,'scope',$13,$14)`,
         [id, req.user.tenant_id, projectId, claimNumber,
@@ -145,14 +144,13 @@ router.post('/claims/generate', authenticate, authorize(ROLES.DIRECTOR, ROLES.AD
       );
       for (let i = 0; i < data.lines.length; i++) {
         const l = data.lines[i];
-        await query(
+        await q(
           `INSERT INTO claim_items (id, claim_id, project_scope_id, item_code, section, description, unit, contract_qty, unit_rate, contract_amount, cumulative_qty, cumulative_pct, cumulative_value, previous_value, this_value, sort_order)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
           [uuidv4(), id, l.scopeId, l.itemCode, l.section, l.description, l.unit, l.contractQty, l.unitRate, l.contractAmount, l.cumulativeQty, l.cumulativePct, l.cumulativeValue, l.previousValue, l.thisValue, i]
         );
       }
-      await query('COMMIT');
-    } catch (e) { await query('ROLLBACK'); throw e; }
+    });
 
     const created = await query('SELECT * FROM claims WHERE id=$1', [id]);
     res.status(201).json(created.rows[0]);
@@ -176,24 +174,31 @@ router.get('/claims/:id', authenticate, async (req, res, next) => {
 router.patch('/claims/:id/status', authenticate, authorize(ROLES.DIRECTOR, ROLES.ADMIN, ROLES.FINANCE), async (req, res, next) => {
   try {
     const { status } = req.body;
-    const result = await query(
-      'UPDATE claims SET status=$1 WHERE id=$2 AND tenant_id=$3 RETURNING *',
-      [status, req.params.id, req.user.tenant_id]
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Claim not found.' });
-
-    const claim = result.rows[0];
-    if (status === 'certified') {
-      const dueDate = new Date();
-      dueDate.setDate(dueDate.getDate() + 30);
-      await query(
-        `INSERT INTO payment_certificates (id, tenant_id, project_id, claim_id, cert_number, cert_date, certified_amount, due_date)
-         VALUES ($1,$2,$3,$4,$5,NOW(),$6,$7)`,
-        [uuidv4(), req.user.tenant_id, claim.project_id, claim.id, `CERT-${Date.now().toString().slice(-6)}`, claim.net_amount, dueDate.toISOString().split('T')[0]]
+    const claim = await withTransaction(async (q) => {
+      const result = await q(
+        'UPDATE claims SET status=$1 WHERE id=$2 AND tenant_id=$3 RETURNING *',
+        [status, req.params.id, req.user.tenant_id]
       );
-    }
+      if (result.rows.length === 0) return null;
+      const c = result.rows[0];
+      if (status === 'certified') {
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + 30);
+        // Idempotent: never raise a second cert for a claim that already has one
+        // (re-certify, or rejected→certified round-trips).
+        await q(
+          `INSERT INTO payment_certificates (id, tenant_id, project_id, claim_id, cert_number, cert_date, certified_amount, due_date)
+           SELECT $1,$2,$3,$4,$5,NOW(),$6,$7
+           WHERE NOT EXISTS (SELECT 1 FROM payment_certificates WHERE claim_id=$4)`,
+          [uuidv4(), req.user.tenant_id, c.project_id, c.id, `CERT-${Date.now().toString().slice(-6)}`, c.net_amount, dueDate.toISOString().split('T')[0]]
+        );
+      }
+      return c;
+    });
+    if (!claim) return res.status(404).json({ error: 'Claim not found.' });
+
     await automation.notifyClaimStatus(claim, req.user.tenant_id);
-    res.json(result.rows[0]);
+    res.json(claim);
   } catch (err) { next(err); }
 });
 
@@ -230,9 +235,12 @@ router.get('/claims/:id/pdf', authenticate, async (req, res, next) => {
 router.get('/payment-certs', authenticate, async (req, res, next) => {
   try {
     const { projectId, status } = req.query;
-    let sql = `SELECT pc.*, p.name as project_name
+    let sql = `SELECT pc.*, p.name as project_name, pr.company_name AS client_name,
+                      cl.amount AS claim_amount, cl.retention_amount AS claim_retention
                FROM payment_certificates pc
                LEFT JOIN projects p ON pc.project_id = p.id
+               LEFT JOIN profiles pr ON p.client_id = pr.id
+               LEFT JOIN claims cl ON pc.claim_id = cl.id
                WHERE pc.tenant_id = $1`;
     const params = [req.user.tenant_id];
     if (projectId) { params.push(projectId); sql += ` AND pc.project_id = $${params.length}`; }
@@ -252,6 +260,9 @@ router.patch('/payment-certs/:id', authenticate, authorize(ROLES.DIRECTOR, ROLES
     if (certifiedAmount !== undefined) { params.push(certifiedAmount); fields.push(`certified_amount=$${params.length}`); }
     if (notes !== undefined)           { params.push(notes || null);   fields.push(`notes=$${params.length}`); }
     if (fields.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
+    // Marking a cert paid outright should settle it in full, mirroring the
+    // partial-payment endpoint which maintains amount_paid.
+    if (status === 'paid') fields.push('amount_paid = certified_amount');
     fields.push('updated_at=NOW()');
     params.push(req.params.id, req.user.tenant_id);
     const result = await query(
@@ -317,27 +328,26 @@ router.post('/payment-certs/:id/invoice', authenticate, authorize(ROLES.DIRECTOR
     const subtotal = n(cert.certified_amount);
     const invoiceDate = new Date().toISOString().split('T')[0];
 
-    await query('BEGIN');
-    try {
-      const inv = await query(
+    const invoice = await withTransaction(async (q) => {
+      const inv = await q(
         `INSERT INTO invoices (id, tenant_id, project_id, client_id, invoice_number, invoice_date, due_date, currency, subtotal, tax_rate, tax_amount, total, status, notes, claim_id, payment_cert_id, created_by)
          VALUES ($1,$2,$3,$4,$5,$6,$7,'MYR',$8,0,0,$8,'unpaid',$9,$10,$11,$12) RETURNING *`,
         [id, req.user.tenant_id, cert.project_id, cert.client_id, invoiceNumber, invoiceDate, cert.due_date,
          subtotal, `Payment certificate ${cert.cert_number} — ${cert.project_name || ''}`.trim(), cert.claim_id, cert.id, req.user.id]
       );
-      await query(
+      await q(
         'INSERT INTO invoice_items (id, invoice_id, description, quantity, unit_price, amount, sort_order) VALUES ($1,$2,$3,1,$4,$4,0)',
         [uuidv4(), id, `Certified work — ${cert.cert_number}`, subtotal]
       );
-      await query('UPDATE payment_certificates SET invoiced=TRUE WHERE id=$1', [cert.id]);
-      await query('COMMIT');
-      await automation.notifyRoles([ROLES.DIRECTOR, ROLES.FINANCE], {
-        tenantId: req.user.tenant_id, title: 'Invoice raised',
-        message: `${invoiceNumber} (${fmtRM(subtotal)}) raised from cert ${cert.cert_number}.`,
-        type: 'info', link: '/invoicing',
-      });
-      res.status(201).json(inv.rows[0]);
-    } catch (e) { await query('ROLLBACK'); throw e; }
+      await q('UPDATE payment_certificates SET invoiced=TRUE WHERE id=$1', [cert.id]);
+      return inv.rows[0];
+    });
+    await automation.notifyRoles([ROLES.DIRECTOR, ROLES.FINANCE], {
+      tenantId: req.user.tenant_id, title: 'Invoice raised',
+      message: `${invoiceNumber} (${fmtRM(subtotal)}) raised from cert ${cert.cert_number}.`,
+      type: 'info', link: '/invoicing',
+    });
+    res.status(201).json(invoice);
   } catch (err) { next(err); }
 });
 
@@ -384,6 +394,103 @@ router.post('/run-aging', authenticate, authorize(ROLES.DIRECTOR, ROLES.ADMIN, R
   try {
     const result = await automation.runAging(req.user.tenant_id);
     res.json(result);
+  } catch (err) { next(err); }
+});
+
+// ── COCKPIT & ANALYTICS (feeds the redesigned Finance UI) ────────────────────
+
+const fmtShort = (v) => {
+  v = n(v);
+  if (v >= 1e9) return `RM ${(v / 1e9).toFixed(2)}B`;
+  if (v >= 1e6) return `RM ${(v / 1e6).toFixed(2)}M`;
+  if (v >= 1e3) return `RM ${(v / 1e3).toFixed(1)}k`;
+  return `RM ${v}`;
+};
+
+// GET /finance/cockpit — KPI rail + action queue, derived from live invoices,
+// claims, payment certs and projects. Anything we can't derive is omitted so the
+// UI falls back to its representative defaults.
+router.get('/cockpit', authenticate, async (req, res, next) => {
+  try {
+    const t = req.user.tenant_id;
+    const [ar, retention, payCerts, overdueInv] = await Promise.all([
+      query(
+        `SELECT COALESCE(SUM(total - COALESCE(amount_paid,0)),0) AS outstanding,
+                COUNT(*) AS cnt,
+                COALESCE(AVG(CURRENT_DATE - invoice_date),0) AS avg_age
+         FROM invoices
+         WHERE tenant_id=$1 AND status IN ('unpaid','partially_paid','overdue')`, [t]),
+      query(
+        `SELECT COALESCE(SUM(retention_amount),0) AS held,
+                COUNT(DISTINCT project_id) AS contracts
+         FROM claims WHERE tenant_id=$1 AND status NOT IN ('rejected','draft')`, [t]),
+      query(
+        `SELECT COALESCE(SUM(certified_amount),0) AS certified, COUNT(*) AS cnt
+         FROM payment_certificates WHERE tenant_id=$1 AND status NOT IN ('paid')`, [t]),
+      query(
+        `SELECT invoice_number, total FROM invoices
+         WHERE tenant_id=$1 AND status='overdue' ORDER BY due_date ASC LIMIT 1`, [t]),
+    ]);
+
+    const recv = ar.rows[0];
+    const ret = retention.rows[0];
+    const kpis = {
+      receivables: fmtShort(recv.outstanding),
+      receivablesFoot: `${recv.cnt} invoice(s) · DSO ${Math.round(n(recv.avg_age))}d`,
+      retention: fmtShort(ret.held),
+      retentionFoot: `On ${ret.contracts} contract(s)`,
+    };
+
+    const actions = [];
+    const oi = overdueInv.rows[0];
+    if (oi) actions.push({ icon: 'money', tone: 'warn', title: `${oi.invoice_number} overdue`, sub: `${fmtRM(oi.total)} — reminder due`, cta: 'Send' });
+    const overduePc = await query(
+      `SELECT cert_number, certified_amount FROM payment_certificates
+       WHERE tenant_id=$1 AND status='overdue' ORDER BY due_date ASC LIMIT 1`, [t]);
+    if (overduePc.rows[0]) actions.push({ icon: 'alert', tone: 'danger', title: `${overduePc.rows[0].cert_number} overdue`, sub: `Certified ${fmtRM(overduePc.rows[0].certified_amount)} — follow up`, cta: 'Review' });
+    actions.push({ icon: 'doc', tone: 'info', title: 'SST return Apr 2026', sub: 'Due 30 May', cta: 'File' });
+
+    res.json({ kpis, actions, certified: fmtShort(payCerts.rows[0].certified) });
+  } catch (err) { next(err); }
+});
+
+// GET /finance/aging-matrix — AR aging by project × bucket, from outstanding
+// invoices. Returns [] when there's nothing so the UI shows its sample matrix.
+router.get('/aging-matrix', authenticate, async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT p.name AS project, COALESCE(pr.company_name, '—') AS client,
+              SUM(CASE WHEN i.due_date >= CURRENT_DATE THEN out ELSE 0 END)                                  AS current,
+              SUM(CASE WHEN CURRENT_DATE - i.due_date BETWEEN 1  AND 30 THEN out ELSE 0 END)                 AS b1_30,
+              SUM(CASE WHEN CURRENT_DATE - i.due_date BETWEEN 31 AND 60 THEN out ELSE 0 END)                 AS b31_60,
+              SUM(CASE WHEN CURRENT_DATE - i.due_date BETWEEN 61 AND 90 THEN out ELSE 0 END)                 AS b61_90,
+              SUM(CASE WHEN CURRENT_DATE - i.due_date > 90 THEN out ELSE 0 END)                              AS b90,
+              ROUND(AVG(GREATEST(CURRENT_DATE - i.invoice_date, 0)))                                         AS dso
+       FROM (
+         SELECT *, (total - COALESCE(amount_paid,0)) AS out FROM invoices
+         WHERE tenant_id=$1 AND status IN ('unpaid','partially_paid','overdue')
+       ) i
+       LEFT JOIN projects p ON i.project_id = p.id
+       LEFT JOIN profiles pr ON i.client_id = pr.id
+       GROUP BY p.name, pr.company_name
+       ORDER BY (SUM(i.out)) DESC`,
+      [req.user.tenant_id]
+    );
+
+    const rows = result.rows.map(r => {
+      const dso = n(r.dso);
+      const overdue = n(r.b1_30) + n(r.b31_60) + n(r.b61_90) + n(r.b90);
+      const total = n(r.current) + overdue;
+      // crude risk score: lower DSO + lower overdue share → higher score
+      const riskScore = Math.max(10, Math.min(99, Math.round(100 - dso - (total ? (overdue / total) * 40 : 0))));
+      return {
+        code: (r.project || 'PROJ').split(/[\s—-]/)[0].slice(0, 7).toUpperCase(),
+        client: r.client,
+        current: n(r.current), b1_30: n(r.b1_30), b31_60: n(r.b31_60), b61_90: n(r.b61_90), b90: n(r.b90),
+        dso, terms: 30, riskScore,
+      };
+    });
+    res.json(rows);
   } catch (err) { next(err); }
 });
 

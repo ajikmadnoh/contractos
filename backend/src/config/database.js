@@ -28,4 +28,25 @@ const query = async (text, params) => {
 
 const getClient = () => pool.connect();
 
-module.exports = { query, getClient, pool };
+// Run a set of statements on a single pooled connection inside one transaction.
+// Acquires a dedicated client (so BEGIN/COMMIT can't land on different
+// connections), commits on success, rolls back on any error, and always
+// releases the client. The callback receives a `query(text, params)` bound to
+// that client.
+const withTransaction = async (fn) => {
+  const client = await pool.connect();
+  const q = (text, params) => client.query(text, params);
+  try {
+    await client.query('BEGIN');
+    const result = await fn(q, client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch (_) { /* connection already broken */ }
+    throw err;
+  } finally {
+    client.release();
+  }
+};
+
+module.exports = { query, getClient, withTransaction, pool };

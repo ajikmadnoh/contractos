@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const { validationResult } = require('express-validator');
-const { query } = require('../config/database');
+const { query, withTransaction } = require('../config/database');
 const { ROLES, SUBSCRIPTION_TIERS } = require('../config/constants');
 
 const generateToken = (userId) => {
@@ -30,21 +30,19 @@ exports.signup = async (req, res, next) => {
     const tenantId = uuidv4();
     const userId = uuidv4();
 
-    await query('BEGIN');
+    await withTransaction(async (q) => {
+      await q(
+        `INSERT INTO tenants (id, company_name, subscription_tier, change_order_threshold)
+         VALUES ($1, $2, $3, $4)`,
+        [tenantId, companyName, SUBSCRIPTION_TIERS.FREE, 10000]
+      );
 
-    await query(
-      `INSERT INTO tenants (id, company_name, subscription_tier, change_order_threshold)
-       VALUES ($1, $2, $3, $4)`,
-      [tenantId, companyName, SUBSCRIPTION_TIERS.FREE, 10000]
-    );
-
-    await query(
-      `INSERT INTO users (id, tenant_id, name, email, password_hash, role, email_verification_token)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [userId, tenantId, name, email, passwordHash, ROLES.DIRECTOR, verificationToken]
-    );
-
-    await query('COMMIT');
+      await q(
+        `INSERT INTO users (id, tenant_id, name, email, password_hash, role, email_verification_token)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [userId, tenantId, name, email, passwordHash, ROLES.DIRECTOR, verificationToken]
+      );
+    });
 
     // TODO: Send verification email via AWS SES
 
@@ -52,7 +50,6 @@ exports.signup = async (req, res, next) => {
       message: 'Account created successfully. Please check your email to verify your account.',
     });
   } catch (err) {
-    await query('ROLLBACK');
     next(err);
   }
 };
