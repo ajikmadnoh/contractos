@@ -8,10 +8,18 @@ const { v4: uuidv4 } = require('uuid');
 router.get('/', authenticate, async (req, res, next) => {
   try {
     const { type } = req.query;
-    let sql = 'SELECT * FROM profiles WHERE tenant_id = $1 AND is_active = true';
     const params = [req.user.tenant_id];
-    if (type) { params.push(type); sql += ` AND profile_type = $${params.length}`; }
-    sql += ' ORDER BY company_name ASC';
+    let where = 'p.tenant_id = $1 AND p.is_active = true';
+    if (type) { params.push(type); where += ` AND p.profile_type = $${params.length}`; }
+    const sql = `
+      SELECT p.*,
+        (SELECT COUNT(*) FROM projects pr WHERE pr.client_id = p.id AND pr.tenant_id = p.tenant_id)::int AS project_count,
+        (SELECT COUNT(*) FROM invoices iv WHERE iv.client_id = p.id AND iv.tenant_id = p.tenant_id)::int AS invoice_count,
+        (SELECT COUNT(*) FROM safety_certifications sc WHERE sc.profile_id = p.id AND sc.tenant_id = p.tenant_id)::int AS cert_count
+      FROM profiles p
+      WHERE ${where}
+      ORDER BY p.company_name ASC
+    `;
     const result = await query(sql, params);
     res.json(result.rows);
   } catch (err) { next(err); }
@@ -26,6 +34,29 @@ router.post('/', authenticate, authorize(ROLES.DIRECTOR, ROLES.ADMIN, ROLES.PM, 
       [uuidv4(), req.user.tenant_id, profileType, companyName, registrationNumber, contactPerson, email, phone, address, bankName, bankAccountNumber, req.user.id]
     );
     res.status(201).json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+router.get('/:id/detail', authenticate, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const tid = req.user.tenant_id;
+    const [profile, projects, invoices, certs] = await Promise.all([
+      query('SELECT * FROM profiles WHERE id=$1 AND tenant_id=$2 AND is_active=true', [id, tid]),
+      query(`SELECT id, name, status, contract_sum, project_phase, start_date, end_date
+             FROM projects WHERE client_id=$1 AND tenant_id=$2 ORDER BY created_at DESC LIMIT 20`, [id, tid]),
+      query(`SELECT id, invoice_number, invoice_date, total, status, project_id
+             FROM invoices WHERE client_id=$1 AND tenant_id=$2 ORDER BY invoice_date DESC LIMIT 20`, [id, tid]),
+      query(`SELECT id, cert_type, holder_name, cert_number, expiry_date
+             FROM safety_certifications WHERE profile_id=$1 AND tenant_id=$2 ORDER BY expiry_date ASC NULLS LAST LIMIT 20`, [id, tid]),
+    ]);
+    if (!profile.rows.length) return res.status(404).json({ error: 'Profile not found.' });
+    res.json({
+      profile: profile.rows[0],
+      projects: projects.rows,
+      invoices: invoices.rows,
+      certs: certs.rows,
+    });
   } catch (err) { next(err); }
 });
 

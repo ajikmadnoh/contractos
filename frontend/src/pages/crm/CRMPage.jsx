@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import api from '../../lib/api';
@@ -17,6 +18,7 @@ const STAGE_MAP = Object.fromEntries(STAGES.map(s => [s.id, s]));
 const VIEW_LABELS = { kanban: 'Pipeline', list: 'List' };
 
 export default function CRMPage() {
+  const navigate = useNavigate();
   const [view, setView] = useState('kanban');
   const [showModal, setShowModal] = useState(false);
   const [filterStage, setFilterStage] = useState('all');
@@ -93,9 +95,9 @@ export default function CRMPage() {
         {isLoading ? (
           <div style={{ textAlign: 'center', padding: '64px', color: 'var(--text-mute)' }}>Loading…</div>
         ) : view === 'kanban' ? (
-          <KanbanView leads={leads} onStageChange={(id, stage) => updateStage.mutate({ id, stage })} fmt={fmt} />
+          <KanbanView leads={leads} onStageChange={(id, stage) => updateStage.mutate({ id, stage })} fmt={fmt} navigate={navigate} />
         ) : (
-          <ListView leads={leads.filter(l => filterStage === 'all' || l.stage === filterStage)} fmt={fmt} onStageChange={(id, stage) => updateStage.mutate({ id, stage })} />
+          <ListView leads={leads.filter(l => filterStage === 'all' || l.stage === filterStage)} fmt={fmt} onStageChange={(id, stage) => updateStage.mutate({ id, stage })} navigate={navigate} />
         )}
 
       {showModal && (
@@ -159,7 +161,7 @@ export default function CRMPage() {
   );
 }
 
-function KanbanView({ leads, onStageChange, fmt }) {
+function KanbanView({ leads, onStageChange, fmt, navigate }) {
   const activeStages = STAGES.filter(s => s.id !== 'lost');
 
   return (
@@ -180,11 +182,31 @@ function KanbanView({ leads, onStageChange, fmt }) {
             <div className="space-y-3 min-h-24">
               {stageLeads.map(lead => (
                 <div key={lead.id} className="card cursor-pointer hover:border-gold/40 border border-transparent transition-colors">
-                  <p className="text-white text-sm font-medium leading-snug mb-1">{lead.title}</p>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6, marginBottom: 4 }}>
+                    <p className="text-white text-sm font-medium leading-snug" style={{ flex: 1 }}>{lead.title}</p>
+                    {lead.converted_project_id && (
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 4,
+                        background: 'var(--good-soft, rgba(34,197,94,.15))', color: 'var(--good)',
+                        whiteSpace: 'nowrap', letterSpacing: '.04em', flexShrink: 0
+                      }}>✓ WON</span>
+                    )}
+                  </div>
                   <p className="text-gray-400 text-xs mb-2">{lead.client_name || '—'}</p>
                   <p className="text-gold text-sm font-bold">{fmt(lead.estimated_value)}</p>
                   {lead.tender_deadline && (
                     <p className="text-xs text-gray-500 mt-1">📅 {new Date(lead.tender_deadline).toLocaleDateString('en-MY')}</p>
+                  )}
+                  {lead.converted_project_id && (
+                    <button
+                      onClick={e => { e.stopPropagation(); navigate(`/dashboard/projects/${lead.converted_project_id}`); }}
+                      style={{
+                        marginTop: 8, width: '100%', padding: '5px 10px', borderRadius: 6, border: '1px solid var(--accent)',
+                        background: 'var(--accent-soft)', color: 'var(--accent-2)', fontSize: 11.5, fontWeight: 600,
+                        cursor: 'pointer', textAlign: 'center',
+                      }}>
+                      View Project →
+                    </button>
                   )}
                   <select
                     value={lead.stage}
@@ -203,7 +225,7 @@ function KanbanView({ leads, onStageChange, fmt }) {
   );
 }
 
-function ListView({ leads, fmt, onStageChange }) {
+function ListView({ leads, fmt, onStageChange, navigate }) {
   return (
     <div className="card overflow-hidden">
       <table className="w-full text-sm">
@@ -214,16 +236,28 @@ function ListView({ leads, fmt, onStageChange }) {
             <th className="text-left text-gray-400 font-medium py-3 px-4">Value</th>
             <th className="text-left text-gray-400 font-medium py-3 px-4">Deadline</th>
             <th className="text-left text-gray-400 font-medium py-3 px-4">Stage</th>
+            <th className="text-left text-gray-400 font-medium py-3 px-4"></th>
           </tr>
         </thead>
         <tbody>
           {leads.length === 0 ? (
-            <tr><td colSpan={5} className="text-center text-gray-500 py-12">No opportunities found.</td></tr>
+            <tr><td colSpan={6} className="text-center text-gray-500 py-12">No opportunities found.</td></tr>
           ) : leads.map(lead => (
             <tr key={lead.id} className="border-b border-navy-light/50 hover:bg-navy-light/30">
               <td className="py-3 px-4">
-                <p className="text-white font-medium">{lead.title}</p>
-                {lead.project_type && <p className="text-xs text-gray-500">{lead.project_type}</p>}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div>
+                    <p className="text-white font-medium">{lead.title}</p>
+                    {lead.project_type && <p className="text-xs text-gray-500">{lead.project_type}</p>}
+                  </div>
+                  {lead.converted_project_id && (
+                    <span style={{
+                      fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 4,
+                      background: 'var(--good-soft, rgba(34,197,94,.15))', color: 'var(--good)',
+                      whiteSpace: 'nowrap', letterSpacing: '.04em', flexShrink: 0
+                    }}>✓ WON</span>
+                  )}
+                </div>
               </td>
               <td className="py-3 px-4 text-gray-300">{lead.client_name || '—'}</td>
               <td className="py-3 px-4 text-gold font-medium">{fmt(lead.estimated_value)}</td>
@@ -233,6 +267,19 @@ function ListView({ leads, fmt, onStageChange }) {
                   className="text-xs bg-navy-dark border border-navy-light rounded px-2 py-1 text-gray-300">
                   {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                 </select>
+              </td>
+              <td className="py-3 px-4">
+                {lead.converted_project_id && (
+                  <button
+                    onClick={() => navigate(`/dashboard/projects/${lead.converted_project_id}`)}
+                    style={{
+                      padding: '4px 10px', borderRadius: 6, border: '1px solid var(--accent)',
+                      background: 'var(--accent-soft)', color: 'var(--accent-2)',
+                      fontSize: 11.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                    }}>
+                    View Project →
+                  </button>
+                )}
               </td>
             </tr>
           ))}

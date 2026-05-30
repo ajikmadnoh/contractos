@@ -454,6 +454,63 @@ router.delete('/:id/members/:userId', canView, canManage, async (req, res, next)
   } catch (err) { next(err); }
 });
 
+// ── Lifecycle pipeline ────────────────────────────────────────────────────────
+// Returns every project with aggregated lead/BQ/claim/cert/invoice/paid data.
+// Used by the Pipeline page to show the full commercial lifecycle at a glance.
+router.get('/pipeline', canView, async (req, res, next) => {
+  try {
+    const r = await query(
+      `SELECT
+         p.id, p.project_number, p.name, p.status, p.contract_sum,
+         p.start_date, p.end_date, p.created_at,
+         u.name  AS pm_name,
+         cl.id   AS lead_id,
+         cl.status AS lead_status,
+         -- BQ
+         bq.bq_count, bq.bq_approved,
+         -- Claims
+         clm.claim_count,
+         COALESCE(clm.claimed_total, 0) AS claimed_total,
+         -- Payment certs
+         pc.cert_count,
+         COALESCE(pc.certified_total, 0) AS certified_total,
+         COALESCE(pc.paid_total, 0)      AS paid_total,
+         -- Invoices
+         inv.invoice_count,
+         COALESCE(inv.invoiced_total, 0) AS invoiced_total
+       FROM projects p
+       LEFT JOIN users u ON u.id = p.pm_id
+       LEFT JOIN crm_leads cl ON cl.converted_project_id = p.id
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*)::int                                          AS bq_count,
+                COUNT(*) FILTER (WHERE status='approved')::int        AS bq_approved
+         FROM bq_documents WHERE project_id = p.id AND deleted_at IS NULL
+       ) bq ON true
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*)::int                                          AS claim_count,
+                COALESCE(SUM(amount), 0)                              AS claimed_total
+         FROM claims WHERE project_id = p.id AND tenant_id = p.tenant_id
+       ) clm ON true
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*)::int                                          AS cert_count,
+                COALESCE(SUM(certified_amount), 0)                    AS certified_total,
+                COALESCE(SUM(CASE WHEN status='paid' THEN certified_amount
+                                  ELSE COALESCE(amount_paid,0) END), 0) AS paid_total
+         FROM payment_certificates WHERE project_id = p.id AND tenant_id = p.tenant_id
+       ) pc ON true
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*)::int                                          AS invoice_count,
+                COALESCE(SUM(total_amount), 0)                        AS invoiced_total
+         FROM invoices WHERE project_id = p.id AND tenant_id = p.tenant_id
+       ) inv ON true
+       WHERE p.tenant_id = $1
+       ORDER BY p.created_at DESC`,
+      [req.user.tenant_id]
+    );
+    res.json(r.rows);
+  } catch (err) { next(err); }
+});
+
 // ── Portfolio aggregates ──────────────────────────────────────────────────────
 router.get('/portfolio/risks', canView, async (req, res, next) => {
   try {

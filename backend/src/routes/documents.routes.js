@@ -11,10 +11,12 @@ router.get('/', async (req, res, next) => {
     const { category, search, project_id } = req.query;
     const { db } = req;
     let q = `
-      SELECT d.*, u.name AS uploaded_by_name, p.name AS project_name
+      SELECT d.*, u.name AS uploaded_by_name, p.name AS project_name,
+             pr.company_name AS profile_name
       FROM documents d
       LEFT JOIN users u ON u.id = d.uploaded_by
       LEFT JOIN projects p ON p.id = d.project_id
+      LEFT JOIN profiles pr ON pr.id = d.profile_id
       WHERE d.tenant_id = $1
     `;
     const params = [req.tenant_id];
@@ -33,7 +35,7 @@ router.post('/upload', async (req, res, next) => {
   try {
     // Note: Actual file bytes handled by multer + S3 in the next sprint.
     // For now we store metadata and a placeholder file_url.
-    const { title, category, description, project_id, send_for_approval } = req.body;
+    const { title, category, description, project_id, profile_id, send_for_approval } = req.body;
 
     // multer will attach req.file when S3 is wired up
     const filename = req.file?.originalname || req.body.filename || 'pending_upload';
@@ -41,14 +43,28 @@ router.post('/upload', async (req, res, next) => {
     const status = send_for_approval === 'true' || send_for_approval === true ? 'pending_approval' : 'active';
 
     const { db } = req;
-    const { rows } = await db.query(`
-      INSERT INTO documents
-        (tenant_id, project_id, title, filename, file_url, file_size, category, description, status, version, uploaded_by)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,1,$10)
-      RETURNING *
-    `, [req.tenant_id, project_id || null, title || filename,
-        filename, null, fileSize, category || 'Other', description,
-        status, req.user.id]);
+    // profile_id column may not exist in all deployments — try with it, fall back without
+    let rows;
+    try {
+      ({ rows } = await db.query(`
+        INSERT INTO documents
+          (tenant_id, project_id, profile_id, title, filename, file_url, file_size, category, description, status, version, uploaded_by)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,1,$11)
+        RETURNING *
+      `, [req.tenant_id, project_id || null, profile_id || null, title || filename,
+          filename, null, fileSize, category || 'Other', description,
+          status, req.user.id]));
+    } catch {
+      // profile_id column not yet migrated — insert without it
+      ({ rows } = await db.query(`
+        INSERT INTO documents
+          (tenant_id, project_id, title, filename, file_url, file_size, category, description, status, version, uploaded_by)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,1,$10)
+        RETURNING *
+      `, [req.tenant_id, project_id || null, title || filename,
+          filename, null, fileSize, category || 'Other', description,
+          status, req.user.id]));
+    }
 
     res.status(201).json({ document: rows[0] });
   } catch (err) { next(err); }

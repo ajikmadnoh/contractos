@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { format } from 'date-fns';
 
@@ -15,6 +15,8 @@ const STATUS_STYLES = {
 export default function InvoicingPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [showNew, setShowNew] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const qc = useQueryClient();
 
   const { data: invoices = [], isLoading, refetch } = useQuery({
     queryKey: ['invoices', statusFilter],
@@ -73,7 +75,9 @@ export default function InvoicingPage() {
             </thead>
             <tbody>
               {invoices.map((inv, i) => (
-                <tr key={inv.id} className={`border-b border-navy-light hover:bg-navy-light transition-colors cursor-pointer ${i % 2 === 0 ? '' : 'bg-navy-dark bg-opacity-30'}`}>
+                <tr key={inv.id}
+                  onClick={() => setSelectedInvoice(inv.id)}
+                  className={`border-b border-navy-light hover:bg-navy-light transition-colors cursor-pointer ${i % 2 === 0 ? '' : 'bg-navy-dark bg-opacity-30'}`}>
                   <td className="px-6 py-4 font-mono text-xs text-gold">{inv.invoice_number}</td>
                   <td className="px-6 py-4 text-white">{inv.client_name || '—'}</td>
                   <td className="px-6 py-4 text-gray-400">{inv.project_name || '—'}</td>
@@ -94,6 +98,13 @@ export default function InvoicingPage() {
       )}
 
       {showNew && <NewInvoiceModal onClose={() => setShowNew(false)} onCreated={() => { setShowNew(false); refetch(); }} />}
+      {selectedInvoice && (
+        <InvoiceDetailDrawer
+          invoiceId={selectedInvoice}
+          onClose={() => setSelectedInvoice(null)}
+          onStatusChanged={() => { refetch(); qc.invalidateQueries(['invoices']); }}
+        />
+      )}
       </div>
     </>
   );
@@ -103,6 +114,22 @@ function NewInvoiceModal({ onClose, onCreated }) {
   const [saving, setSaving] = useState(false);
   const [items, setItems] = useState([{ description: '', quantity: 1, unitPrice: '' }]);
   const [taxRate, setTaxRate] = useState(0);
+  const [clientId, setClientId] = useState('');
+  const [projectId, setProjectId] = useState('');
+
+  const { data: clientProfiles = [] } = useQuery({
+    queryKey: ['profiles-clients'],
+    queryFn: () => api.get('/profiles').then(r =>
+      (r.data || []).filter(p => ['client', 'main_contractor'].includes(p.profile_type))
+    ),
+    staleTime: 5 * 60_000,
+  });
+
+  const { data: projectsData = [] } = useQuery({
+    queryKey: ['projects-list'],
+    queryFn: () => api.get('/projects').then(r => r.data?.projects || r.data || []),
+    staleTime: 5 * 60_000,
+  });
 
   const addItem = () => setItems(i => [...i, { description: '', quantity: 1, unitPrice: '' }]);
   const updateItem = (idx, field, val) => setItems(items.map((item, i) => i === idx ? { ...item, [field]: val } : item));
@@ -122,6 +149,8 @@ function NewInvoiceModal({ onClose, onCreated }) {
         currency: form.get('currency'),
         taxRate: Number(taxRate),
         notes: form.get('notes'),
+        clientId: clientId || undefined,
+        projectId: projectId || undefined,
         items: items.map(i => ({ description: i.description, quantity: Number(i.quantity), unitPrice: Number(i.unitPrice) })),
       });
       onCreated();
@@ -140,6 +169,23 @@ function NewInvoiceModal({ onClose, onCreated }) {
           <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">×</button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Client</label>
+              <select className="input-field" value={clientId} onChange={e => setClientId(e.target.value)}>
+                <option value="">— No client —</option>
+                {clientProfiles.map(p => <option key={p.id} value={p.id}>{p.company_name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">Project</label>
+              <select className="input-field" value={projectId} onChange={e => setProjectId(e.target.value)}>
+                <option value="">— No project —</option>
+                {projectsData.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+          </div>
+
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="label">Invoice Date *</label>
@@ -208,5 +254,179 @@ function NewInvoiceModal({ onClose, onCreated }) {
         </form>
       </div>
     </div>
+  );
+}
+
+// ── Invoice detail drawer ─────────────────────────────────────────────────────
+
+const INV_STATUS_COLOR = {
+  paid: 'var(--good)', unpaid: 'var(--warn)', overdue: 'var(--danger)',
+  draft: 'var(--text-mute)', partially_paid: 'var(--info)', cancelled: 'var(--text-dim)',
+  sent: 'var(--info)',
+};
+
+function InvoiceDetailDrawer({ invoiceId, onClose, onStatusChanged }) {
+  const [markingPaid, setMarkingPaid] = useState(false);
+  const [markingSent, setMarkingSent] = useState(false);
+  const qc = useQueryClient();
+
+  const { data: inv, isLoading } = useQuery({
+    queryKey: ['invoice-detail', invoiceId],
+    queryFn: () => api.get(`/invoices/${invoiceId}`).then(r => r.data),
+    staleTime: 30_000,
+  });
+
+  const changeStatus = async (status, setLoading) => {
+    setLoading(true);
+    try {
+      await api.patch(`/invoices/${invoiceId}/status`, { status });
+      qc.invalidateQueries(['invoice-detail', invoiceId]);
+      onStatusChanged();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to update status.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fmtRM = v => 'RM ' + parseFloat(v || 0).toLocaleString('en-MY', { minimumFractionDigits: 2 });
+  const fmtD  = d => d ? format(new Date(d), 'dd MMM yyyy') : '—';
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 200 }} />
+      <div style={{
+        position: 'fixed', top: 0, right: 0, bottom: 0, width: 480, maxWidth: '95vw',
+        background: 'var(--surface)', borderLeft: '1px solid var(--border)',
+        zIndex: 201, overflowY: 'auto', display: 'flex', flexDirection: 'column',
+        animation: 'slideInRight .2s ease',
+      }}>
+        {isLoading || !inv ? (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-mute)' }}>Loading…</div>
+        ) : (
+          <>
+            {/* Header */}
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 11, color: 'var(--text-mute)', fontFamily: 'monospace', marginBottom: 4 }}>{inv.invoice_number}</p>
+                <h2 style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>{inv.client_name || inv.project_name || 'Invoice'}</h2>
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99,
+                  background: 'rgba(255,255,255,.06)', color: INV_STATUS_COLOR[inv.status] || 'var(--text-mute)',
+                  textTransform: 'uppercase', letterSpacing: '.05em',
+                }}>
+                  {inv.status?.replace('_', ' ')}
+                </span>
+              </div>
+              <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-mute)', fontSize: 22, cursor: 'pointer', padding: 4 }}>×</button>
+            </div>
+
+            {/* Meta row */}
+            <div style={{ padding: '14px 24px', borderBottom: '1px solid var(--border)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              {[
+                { label: 'Invoice Date', value: fmtD(inv.invoice_date) },
+                { label: 'Due Date',     value: fmtD(inv.due_date) },
+                { label: 'Project',      value: inv.project_name || '—' },
+                { label: 'Client',       value: inv.client_name  || '—' },
+              ].map(({ label, value }) => (
+                <div key={label}>
+                  <p style={{ fontSize: 10, color: 'var(--text-mute)', marginBottom: 2 }}>{label}</p>
+                  <p style={{ fontSize: 13, color: 'var(--text)' }}>{value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Line items */}
+            <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border)' }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-mute)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10 }}>
+                Line Items
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {(inv.items || []).map((item, idx) => (
+                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,.04)' }}>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: 13, color: 'var(--text)' }}>{item.description}</p>
+                      <p style={{ fontSize: 11, color: 'var(--text-mute)' }}>{item.quantity} × {fmtRM(item.unit_price)}</p>
+                    </div>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{fmtRM(item.amount)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Totals */}
+            <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border)' }}>
+              {[
+                { label: 'Subtotal', value: fmtRM(inv.subtotal) },
+                inv.tax_rate > 0 && { label: `Tax (${inv.tax_rate}%)`, value: fmtRM(inv.tax_amount) },
+              ].filter(Boolean).map(({ label, value }) => (
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontSize: 13, color: 'var(--text-mute)' }}>{label}</span>
+                  <span style={{ fontSize: 13, color: 'var(--text)' }}>{value}</span>
+                </div>
+              ))}
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>Total</span>
+                <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{fmtRM(inv.total)}</span>
+              </div>
+              {inv.amount_paid > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                  <span style={{ fontSize: 13, color: 'var(--good)' }}>Amount Paid</span>
+                  <span style={{ fontSize: 13, color: 'var(--good)' }}>{fmtRM(inv.amount_paid)}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Notes */}
+            {inv.notes && (
+              <div style={{ padding: '14px 24px', borderBottom: '1px solid var(--border)' }}>
+                <p style={{ fontSize: 11, color: 'var(--text-mute)', marginBottom: 4 }}>Notes</p>
+                <p style={{ fontSize: 13, color: 'var(--text-dim)' }}>{inv.notes}</p>
+              </div>
+            )}
+
+            {/* Actions */}
+            {inv.status !== 'paid' && inv.status !== 'cancelled' && (
+              <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-mute)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>Actions</p>
+                {inv.status === 'draft' && (
+                  <button
+                    disabled={markingSent}
+                    onClick={() => changeStatus('sent', setMarkingSent)}
+                    style={{ padding: '10px', borderRadius: 8, border: '1px solid var(--info)', background: 'rgba(59,130,246,.12)', color: 'var(--info)', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                    {markingSent ? 'Updating…' : '📤 Mark as Sent'}
+                  </button>
+                )}
+                <button
+                  disabled={markingPaid}
+                  onClick={() => changeStatus('paid', setMarkingPaid)}
+                  style={{ padding: '10px', borderRadius: 8, border: '1px solid var(--good)', background: 'var(--good-soft)', color: 'var(--good)', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                  {markingPaid ? 'Updating…' : '✓ Mark as Paid'}
+                </button>
+                {inv.status !== 'cancelled' && (
+                  <button
+                    onClick={() => { if (window.confirm('Cancel this invoice?')) changeStatus('cancelled', () => {}); }}
+                    style={{ padding: '10px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-mute)', fontSize: 13, cursor: 'pointer' }}>
+                    Cancel Invoice
+                  </button>
+                )}
+              </div>
+            )}
+            {inv.status === 'paid' && (
+              <div style={{ padding: '20px 24px', textAlign: 'center', color: 'var(--good)' }}>
+                <p style={{ fontSize: 24, marginBottom: 6 }}>✓</p>
+                <p style={{ fontWeight: 600 }}>Invoice Paid</p>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+      <style>{`
+        @keyframes slideInRight {
+          from { transform: translateX(100%); opacity: 0; }
+          to   { transform: translateX(0);    opacity: 1; }
+        }
+      `}</style>
+    </>
   );
 }

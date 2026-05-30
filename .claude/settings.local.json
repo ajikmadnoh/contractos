@@ -72,7 +72,30 @@
       "Bash(curl -s http://localhost:3001/)",
       "Bash(curl -s -o /dev/null -w \"ProjectDetailPage transform: %{http_code}\\\\n\" \"http://localhost:3001/src/pages/projects/ProjectDetailPage.jsx\")",
       "Bash(curl -s \"http://localhost:3001/src/pages/projects/ProjectDetailPage.jsx\")",
-      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts',{}\\), indent=2\\)\\)\")"
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts',{}\\), indent=2\\)\\)\")",
+      "Bash(ls src/models)",
+      "Bash(ls srcservices *)",
+      "Bash(ls srcmodels *)",
+      "Bash(cp \"webfetch-1780148424570-22x1wb.bin\" design.gz)",
+      "Bash(mkdir -p design_out)",
+      "Bash(gunzip -c design.gz)",
+      "Bash(tar -tf design_out/design.tar)",
+      "Bash(tar -xf design_out/design.tar -C design_out)",
+      "Bash(awk '/^\\\\.\\(card|card-head|card-body|tbl|kpi|kpi-grid|kpi-label|kpi-value|kpi-foot|kpi-spark|tabs|pill|badge|btn|page-head|page-body|sub|spacer|num|muted|delta|rise\\)\\([ .,:{]|$\\)/{f=1} f{print} /^}/{if\\(f && !inblock\\)f=0} ' styles.css)",
+      "Bash(node --check src/routes/finance.routes.js)",
+      "Bash(node --check src/controllers/auth.controller.js)",
+      "Bash(node --check src/config/seed.js)",
+      "Bash(node --input-type=module --eval ' *)",
+      "Bash(grep -r inventory_items 'D:\\\\Project\\\\Web Project\\\\contractos\\\\backend\\\\src\\\\config\\\\migrations\" | grep CREATE' 'TABLE *)",
+      "Bash(node --check \"D:/Project/Web Project/contractos/backend/src/routes/fleet.routes.js\")",
+      "Bash(node --check \"D:/Project/Web Project/contractos/backend/src/routes/safety.routes.js\")",
+      "Bash(node --check \"D:/Project/Web Project/contractos/backend/src/routes/inventory.routes.js\")",
+      "Bash(node --check \"D:/Project/Web Project/contractos/backend/src/routes/projects.routes.js\")",
+      "Bash(node --check \"D:/Project/Web Project/contractos/backend/src/services/automationService.js\")",
+      "Bash(node --check \"D:/Project/Web Project/contractos/backend/src/routes/invoices.routes.js\")",
+      "Bash(node --check \"D:/Project/Web Project/contractos/backend/src/routes/profiles.routes.js\")",
+      "Bash(node --check \"D:/Project/Web Project/contractos/backend/src/routes/crm.routes.js\")",
+      "Bash(node --check \"D:/Project/Web Project/contractos/backend/src/routes/documents.routes.js\")"
     ]
   }
 }

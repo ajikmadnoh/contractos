@@ -22,6 +22,7 @@ import FleetPage from './pages/fleet/FleetPage';
 import MarketRatesPage from './pages/rates/MarketRatesPage';
 import InventoryPage from './pages/inventory/InventoryPage';
 import DocumentsPage from './pages/documents/DocumentsPage';
+import PipelinePage from './pages/pipeline/PipelinePage';
 import DashboardLayout from './layouts/DashboardLayout';
 
 const PrivateRoute = ({ children }) => {
@@ -62,6 +63,7 @@ export default function App() {
         <Route path="rates" element={<MarketRatesPage />} />
         <Route path="inventory" element={<InventoryPage />} />
         <Route path="documents" element={<DocumentsPage />} />
+        <Route path="pipeline" element={<PipelinePage />} />
       </Route>
 
       {/* Catch-all */}

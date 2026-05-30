@@ -341,6 +341,69 @@ async function notifyBqStatus(bq, tenantId) {
   }
 }
 
+// ── Invoice event notifications ───────────────────────────────────────────────
+
+// eventType: 'created' | 'paid' | 'sent'
+async function notifyInvoiceEvent(invoice, tenantId) {
+  const { status, invoice_number, total, project_id } = invoice;
+  const base = { tenantId, link: '/invoicing' };
+
+  if (status === 'paid') {
+    await notifyProjectStakeholders(project_id, ['director', 'finance'], {
+      ...base,
+      title: `Invoice paid — ${invoice_number}`,
+      message: `Invoice ${invoice_number} (${fmtRM(total)}) has been marked as paid.`,
+      type: 'success',
+    });
+  } else if (status === 'sent') {
+    await notifyRoles(['director', 'finance'], {
+      ...base,
+      title: `Invoice sent — ${invoice_number}`,
+      message: `Invoice ${invoice_number} (${fmtRM(total)}) has been sent to the client.`,
+      type: 'info',
+    });
+  } else {
+    // created / unpaid
+    await notifyRoles(['director', 'finance'], {
+      ...base,
+      title: `Invoice created — ${invoice_number}`,
+      message: `New invoice ${invoice_number} for ${fmtRM(total)} has been raised.`,
+      type: 'info',
+    });
+  }
+}
+
+// ── CRM lead won notification ─────────────────────────────────────────────────
+
+async function notifyLeadWon(lead, tenantId) {
+  const { title, client_name, estimated_value } = lead;
+  const valStr = estimated_value ? ` (${fmtRM(estimated_value)})` : '';
+  await notifyRoles(['director', 'admin', 'pm'], {
+    tenantId,
+    title: `🎉 Tender won — ${title}`,
+    message: `Lead "${title}"${client_name ? ` for ${client_name}` : ''}${valStr} has been moved to Won. Time to create a project!`,
+    type: 'success',
+    link: '/dashboard/crm',
+  });
+}
+
+// ── Safety incident notifications ─────────────────────────────────────────────
+
+async function notifyIncidentReported(incident, tenantId) {
+  const { title, severity, project_id, location } = incident;
+  const sevLabel = { fatal: 'FATAL', serious: 'Serious', minor: 'Minor', near_miss: 'Near-miss' }[severity] || severity;
+  const isCritical = severity === 'fatal' || severity === 'serious';
+  const prefix = isCritical ? '🚨 ' : '';
+
+  await notifyProjectStakeholders(project_id, ['director', 'admin', 'pm'], {
+    tenantId,
+    title: `${prefix}Safety incident — ${sevLabel}`,
+    message: `${sevLabel} incident reported: "${title}"${location ? ` at ${location}` : ''}. Immediate review required.`,
+    type: isCritical ? 'danger' : 'warning',
+    link: '/safety',
+  });
+}
+
 // ── Full daily sweep (aging + escalations + milestone check) ──────────────────
 
 // Run everything that should fire daily. Safe to call repeatedly — each sub-job
@@ -372,6 +435,9 @@ module.exports = {
   notifyClaimStatus,
   notifyBqStatus,
   notifyChangeOrderPending,
+  notifyInvoiceEvent,
+  notifyIncidentReported,
+  notifyLeadWon,
   logRun,
   getAutomationStatus,
 };

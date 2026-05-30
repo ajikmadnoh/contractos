@@ -54,20 +54,21 @@ function KpiTile({ id, label, value, unit, delta, deltaLabel, spark, sparkColor,
 }
 
 // ── Cashflow Card ─────────────────────────────────────────────────────────────
-function CashflowCard() {
+function CashflowCard({ totalClaimed, totalInvoiced, totalCollected }) {
+  const gap = totalInvoiced - totalCollected;
   return (
     <div className="card rise rise-2">
       <div className="card-head">
         <div>
-          <div className="card-title">Cashflow — next 90 days</div>
-          <div className="card-sub">Certified vs invoiced vs received</div>
+          <div className="card-title">Commercial snapshot</div>
+          <div className="card-sub">Claimed → invoiced → collected</div>
         </div>
         <div className="spacer" style={{ flex: 1 }} />
         <div className="chart-legend">
           {[
-            { label: 'Certified', color: 'var(--accent)' },
+            { label: 'Claimed',   color: 'var(--accent)' },
             { label: 'Invoiced',  color: 'var(--info)',   dash: true },
-            { label: 'Received',  color: 'var(--good)' },
+            { label: 'Collected', color: 'var(--good)' },
           ].map((it, i) => (
             <span key={i} className="chart-legend-item">
               <span style={{
@@ -84,16 +85,18 @@ function CashflowCard() {
         <CashflowChart height={240} />
         <div style={{ display: 'flex', gap: 24, padding: '12px 12px 4px', fontSize: 12 }}>
           <div>
-            <div style={{ color: 'var(--text-dim)' }}>This week</div>
-            <div style={{ fontWeight: 600, fontFamily: 'JetBrains Mono, monospace' }}>RM 6.4M certified</div>
+            <div style={{ color: 'var(--text-dim)' }}>Total claimed</div>
+            <div style={{ fontWeight: 600, fontFamily: 'JetBrains Mono, monospace' }}>{fmtRM(totalClaimed)}</div>
           </div>
           <div>
-            <div style={{ color: 'var(--text-dim)' }}>Forecast 90d</div>
-            <div style={{ fontWeight: 600, fontFamily: 'JetBrains Mono, monospace' }}>RM 84.2M</div>
+            <div style={{ color: 'var(--text-dim)' }}>Total invoiced</div>
+            <div style={{ fontWeight: 600, fontFamily: 'JetBrains Mono, monospace' }}>{fmtRM(totalInvoiced)}</div>
           </div>
           <div>
-            <div style={{ color: 'var(--text-dim)' }}>Gap (cert→received)</div>
-            <div style={{ fontWeight: 600, fontFamily: 'JetBrains Mono, monospace', color: 'var(--warn)' }}>−RM 12.1M</div>
+            <div style={{ color: 'var(--text-dim)' }}>Gap (invoiced→collected)</div>
+            <div style={{ fontWeight: 600, fontFamily: 'JetBrains Mono, monospace', color: gap > 0 ? 'var(--warn)' : 'var(--good)' }}>
+              {gap > 0 ? `−${fmtRM(gap)}` : fmtRM(0)}
+            </div>
           </div>
         </div>
       </div>
@@ -204,7 +207,7 @@ function ProjectsTable({ projects, loading, navigate }) {
               const statusCls = { active: 'good', delayed: 'danger', completed: 'info', on_hold: 'warn' }[p.status] || 'outline';
               const code = (p.project_number || p.project_code || p.name || '').slice(0, 4).toUpperCase();
               return (
-                <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => navigate('/dashboard/projects')}>
+                <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/dashboard/projects/${p.id}`)}>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span style={{
@@ -404,6 +407,11 @@ export default function DashboardPage() {
     queryKey: ['claims'],
     queryFn: () => api.get('/finance/claims').then(r => r.data),
   });
+  const { data: usersData } = useQuery({
+    queryKey: ['users-count'],
+    queryFn: () => api.get('/users').then(r => r.data),
+    staleTime: 10 * 60_000,
+  });
 
   // ── Derived metrics ──────────────────────────────────────────────────────
   const projects   = projData?.projects || projData || [];
@@ -412,6 +420,7 @@ export default function DashboardPage() {
   const invItems   = invItemsData?.items || [];
   const vehicles   = fleetData?.vehicles || [];
   const claims     = claimsData?.claims  || claimsData || [];
+  const usersTotal = (usersData?.users || usersData || []).length || 0;
 
   const active    = projects.filter(p => p.status === 'active').length;
   const delayed   = projects.filter(p => p.status === 'delayed').length;
@@ -432,6 +441,10 @@ export default function DashboardPage() {
   const claimsOutstanding = claims.filter(c => !['paid','rejected'].includes(c.status))
     .reduce((s, c) => s + parseFloat(c.amount || 0), 0);
   const totalBilled       = claims.reduce((s, c) => s + parseFloat(c.amount || 0), 0);
+
+  const totalInvoiced  = invoices.reduce((s, i) => s + parseFloat(i.total_amount || i.total || 0), 0);
+  const totalCollected = invoices.filter(i => i.status === 'paid')
+    .reduce((s, i) => s + parseFloat(i.total_amount || i.total || 0), 0);
 
   // ── Alerts ───────────────────────────────────────────────────────────────
   const [alertItems, setAlertItems] = useState(null);
@@ -557,7 +570,7 @@ export default function DashboardPage() {
 
           {/* Main column: chart, projects, then a paired stat row */}
           <div className="dash-main">
-            <CashflowCard />
+            <CashflowCard totalClaimed={totalBilled} totalInvoiced={totalInvoiced} totalCollected={totalCollected} />
             <ProjectsTable projects={projects} loading={loadingProj} navigate={navigate} />
             <div className="dash-duo">
               <FinanceCard
@@ -582,7 +595,7 @@ export default function DashboardPage() {
             <AlertsCard alerts={alerts} onDismiss={dismissAlert} />
             <UtilisationCard
               staffIn={staffIn || staffOnSite}
-              staffTotal={invItems.length > 0 ? 884 : staffIn * 2 || 0}
+              staffTotal={usersTotal || Math.max(staffIn * 2, 1)}
             />
             <QuickActions navigate={navigate} />
           </div>

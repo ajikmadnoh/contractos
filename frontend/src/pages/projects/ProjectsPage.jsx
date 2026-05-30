@@ -1033,7 +1033,15 @@ function NewProjectModal({ onClose, onCreated }) {
   const [form, setForm] = useState({
     name: '', description: '', contractSum: '', startDate: '', endDate: '',
     siteAddress: '', retentionPercentage: '10', projectType: 'building',
-    projectPhase: 'pre_construction'
+    projectPhase: 'pre_construction', clientId: ''
+  });
+
+  const { data: clientProfiles = [] } = useQuery({
+    queryKey: ['profiles-clients'],
+    queryFn: () => api.get('/profiles').then(r =>
+      (r.data || []).filter(p => ['client', 'main_contractor'].includes(p.profile_type))
+    ),
+    staleTime: 5 * 60_000,
   });
 
   const handleSubmit = async (e) => {
@@ -1045,7 +1053,8 @@ function NewProjectModal({ onClose, onCreated }) {
         contractSum: form.contractSum, startDate: form.startDate,
         endDate: form.endDate, siteAddress: form.siteAddress,
         retentionPercentage: form.retentionPercentage,
-        projectType: form.projectType, projectPhase: form.projectPhase
+        projectType: form.projectType, projectPhase: form.projectPhase,
+        clientId: form.clientId || undefined,
       });
       onCreated();
     } catch (err) {
@@ -1094,9 +1103,20 @@ function NewProjectModal({ onClose, onCreated }) {
                 </select>
               </div>
             </div>
-            <div className="form-group">
-              <label className="label">Site Address</label>
-              <input className="input" placeholder="e.g. Bukit Damansara, Kuala Lumpur" {...f('siteAddress')} />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="form-group">
+                <label className="label">Client / Main Contractor</label>
+                <select className="input" value={form.clientId} onChange={e => setForm(prev => ({ ...prev, clientId: e.target.value }))}>
+                  <option value="">— No client linked —</option>
+                  {clientProfiles.map(p => (
+                    <option key={p.id} value={p.id}>{p.company_name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="label">Site Address</label>
+                <input className="input" placeholder="e.g. Bukit Damansara, KL" {...f('siteAddress')} />
+              </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div className="form-group">

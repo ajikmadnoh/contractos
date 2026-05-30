@@ -193,7 +193,7 @@ function DeleteBQButton({ bqId, onDeleted }) {
 }
 
 // ── Documents table (with working filters) ──────────────────────────────────────
-function DocumentsTable({ bqs, loading, onOpen, onNew, onDeleted }) {
+function DocumentsTable({ bqs, loading, onOpen, onNew, onDeleted, onRaiseClaim }) {
   const [activeFilter, setActiveFilter] = useState('all');
 
   const filtered = activeFilter === 'all' ? bqs : bqs.filter(b => b.status === activeFilter);
@@ -273,6 +273,13 @@ function DocumentsTable({ bqs, loading, onOpen, onNew, onDeleted }) {
                 <td style={{ color: 'var(--text-dim)', fontSize: 12 }}>{bq.created_at ? format(new Date(bq.created_at), 'dd MMM yyyy') : '—'}</td>
                 <td>
                   <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
+                    {bq.status === 'approved' && bq.project_id && (
+                      <button className="btn sm ghost" onClick={() => onRaiseClaim?.(bq)}
+                        title="Raise progress claim from this BQ"
+                        style={{ color: 'var(--info, #3b82f6)', borderColor: 'var(--info, #3b82f6)' }}>
+                        <Icon name="money" size={12} /> Claim
+                      </button>
+                    )}
                     <button className="btn sm ghost" onClick={() => onOpen(bq)} title="Open"><Icon name="chevR" size={12} /></button>
                     <DeleteBQButton bqId={bq.id} onDeleted={onDeleted} />
                   </div>
@@ -290,6 +297,7 @@ function DocumentsTable({ bqs, loading, onOpen, onNew, onDeleted }) {
 export default function BQPage() {
   const [showNew, setShowNew] = useState(false);
   const [selected, setSelected] = useState(null);
+  const [claimBQ, setClaimBQ] = useState(null);
   const qc = useQueryClient();
 
   const { data: bqs = [], isLoading } = useQuery({
@@ -341,13 +349,22 @@ export default function BQPage() {
           <StatusFunnel bqs={bqs} />
         </div>
         <DocumentsTable bqs={bqs} loading={isLoading} onOpen={setSelected} onNew={() => setShowNew(true)}
-          onDeleted={() => { qc.invalidateQueries({ queryKey: ['bqs'] }); setSelected(null); }} />
+          onDeleted={() => { qc.invalidateQueries({ queryKey: ['bqs'] }); setSelected(null); }}
+          onRaiseClaim={setClaimBQ} />
       </div>
 
       {showNew && (
         <NewBQModal
           onClose={() => setShowNew(false)}
           onCreated={(bq) => { setShowNew(false); setSelected(bq); qc.invalidateQueries(['bqs']); }}
+        />
+      )}
+
+      {claimBQ && (
+        <RaiseClaimModal
+          bq={claimBQ}
+          onClose={() => setClaimBQ(null)}
+          onSuccess={() => { setClaimBQ(null); qc.invalidateQueries({ queryKey: ['bqs'] }); }}
         />
       )}
     </>
@@ -406,6 +423,135 @@ function NewBQModal({ onClose, onCreated }) {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Raise Claim modal (from approved BQ) ──────────────────────────────────────
+function RaiseClaimModal({ bq, onClose, onSuccess }) {
+  const [preview, setPreview] = useState(null);
+  const [loadingPreview, setLoadingPreview] = useState(true);
+  const [previewErr, setPreviewErr] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [submitErr, setSubmitErr] = useState(null);
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [form, setForm] = useState({
+    claimDate: todayStr,
+    description: `Progress claim — ${bq.title}`,
+    taxRate: '',
+  });
+
+  useEffect(() => {
+    api.get(`/finance/claims/preview/${bq.project_id}`)
+      .then(r => { setPreview(r.data); setLoadingPreview(false); })
+      .catch(err => { setPreviewErr(err.response?.data?.error || 'Could not load claim preview.'); setLoadingPreview(false); });
+  }, [bq.project_id]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true); setSubmitErr(null);
+    try {
+      await api.post('/finance/claims/generate', {
+        projectId: bq.project_id,
+        claimDate: form.claimDate,
+        description: form.description,
+        taxRate: Number(form.taxRate) || 0,
+      });
+      onSuccess();
+    } catch (err) {
+      setSubmitErr(err.response?.data?.error || 'Failed to raise claim.');
+      setSaving(false);
+    }
+  };
+
+  const fmt2 = (v) => 'RM ' + Number(v || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const canSubmit = !saving && !loadingPreview && preview && Number(preview.thisClaim) > 0;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
+        <div className="modal-head">
+          <div className="modal-title">Raise Progress Claim</div>
+          <div style={{ fontSize: 12, color: 'var(--text-dim)', marginLeft: 10 }}>{bq.project_name || 'No project'}</div>
+          <div style={{ flex: 1 }} />
+          <button className="icon-btn" onClick={onClose}><Icon name="x" size={16} /></button>
+        </div>
+
+        <div className="modal-body">
+          {/* Preview panel */}
+          {loadingPreview && (
+            <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-mute)', fontSize: 13 }}>
+              Loading claim preview…
+            </div>
+          )}
+          {previewErr && (
+            <div style={{ color: 'var(--danger)', background: 'var(--danger-soft)', padding: '10px 14px', borderRadius: 8, fontSize: 12.5, marginBottom: 16 }}>
+              {previewErr}
+            </div>
+          )}
+          {preview && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
+                {[
+                  { label: 'Cumulative done',     value: fmt2(preview.cumulativeValue),  dim: true },
+                  { label: 'Previously claimed',  value: fmt2(preview.previousValue),    dim: true },
+                  { label: 'This claim (gross)',  value: fmt2(preview.thisClaim),        accent: true },
+                ].map(c => (
+                  <div key={c.label} style={{ background: 'var(--surface-2)', borderRadius: 8, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 10.5, color: 'var(--text-dim)', marginBottom: 4 }}>{c.label}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', color: c.accent ? 'var(--accent)' : 'var(--text)' }}>{c.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--text-dim)', marginBottom: 16, flexWrap: 'wrap' }}>
+                <span>{preview.lines?.length ?? 0} scope line{(preview.lines?.length ?? 0) !== 1 ? 's' : ''}</span>
+                <span>Retention: <strong style={{ color: 'var(--text)' }}>{fmt2(preview.retentionAmount)}</strong></span>
+                <span>Net payable: <strong style={{ color: 'var(--good)' }}>{fmt2(preview.netAmount)}</strong></span>
+              </div>
+              {Number(preview.thisClaim) <= 0 && (
+                <div style={{ color: 'var(--warn)', background: 'var(--warn-soft, rgba(216,130,0,.08))', padding: '10px 14px', borderRadius: 8, fontSize: 12.5, marginBottom: 16 }}>
+                  Nothing new to claim — all work done to date is already captured in prior claims. Update project progress first.
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Form */}
+          <form id="raise-claim-form" onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label className="label">Claim Date *</label>
+              <input className="input" type="date" required value={form.claimDate}
+                onChange={e => setForm(f => ({ ...f, claimDate: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label className="label">Description</label>
+              <input className="input" value={form.description}
+                onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label className="label">
+                SST / Tax Rate (%)
+                <span style={{ marginLeft: 6, fontWeight: 400, color: 'var(--text-mute)' }}>optional</span>
+              </label>
+              <input className="input" type="number" step="0.1" min="0" max="100" placeholder="0"
+                value={form.taxRate} onChange={e => setForm(f => ({ ...f, taxRate: e.target.value }))} />
+            </div>
+          </form>
+
+          {submitErr && (
+            <div style={{ color: 'var(--danger)', background: 'var(--danger-soft)', padding: '10px 14px', borderRadius: 8, fontSize: 12.5, marginTop: 4 }}>
+              {submitErr}
+            </div>
+          )}
+        </div>
+
+        <div className="modal-foot">
+          <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
+          <button type="submit" form="raise-claim-form" className="btn primary" disabled={!canSubmit}>
+            {saving ? 'Submitting…' : 'Submit Claim'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -632,6 +778,7 @@ function BQEditor({ bq, onSaved, onDeleted }) {
   const status = detail?.status || bq.status || 'draft';
   const editable = status === 'draft' || status === 'submitted';
   const [busy, setBusy] = useState(false);
+  const [showClaimModal, setShowClaimModal] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
@@ -704,6 +851,11 @@ function BQEditor({ bq, onSaved, onDeleted }) {
           </button>
           {status === 'draft' && <button className="btn sm" onClick={() => handleTransition('submitted')} disabled={busy}>Submit</button>}
           {status === 'submitted' && <button className="btn sm" style={{ background: 'var(--good)', color: '#fff' }} onClick={() => handleTransition('approved')} disabled={busy}>Approve</button>}
+          {status === 'approved' && bq.project_id && (
+            <button className="btn sm" style={{ background: 'var(--info, #3b82f6)', color: '#fff' }} onClick={() => setShowClaimModal(true)} disabled={busy} title="Raise a progress claim from this BQ">
+              <Icon name="money" size={13} /> Raise Claim
+            </button>
+          )}
           <button className="btn primary sm" onClick={handleSave} disabled={saving || !editable} title={editable ? '' : `Locked (${status})`}>
             <Icon name="check" size={13} /> {saving ? 'Saving…' : 'Save BQ'}
           </button>
@@ -863,6 +1015,18 @@ function BQEditor({ bq, onSaved, onDeleted }) {
 
       {/* Version history panel */}
       {showHistory && <HistoryPanel bqId={bq.id} onClose={() => setShowHistory(false)} />}
+
+      {/* Raise Claim modal */}
+      {showClaimModal && (
+        <RaiseClaimModal
+          bq={{ ...bq, status, project_name: detail?.project_name || bq.project_name }}
+          onClose={() => setShowClaimModal(false)}
+          onSuccess={() => {
+            setShowClaimModal(false);
+            onSaved(); // return to list so user can see the new claim in Finance
+          }}
+        />
+      )}
     </div>
   );
 }

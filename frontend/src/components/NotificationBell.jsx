@@ -1,84 +1,183 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import api from '../lib/api';
+import Icon from './Icon';
+
+const TYPE_ICON = {
+  alert: '⚠️',
+  payment: '💰',
+  hr: '👥',
+  project: '📁',
+  system: '🔔',
+  safety: '🛡️',
+};
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
+  const navigate = useNavigate();
   const qc = useQueryClient();
 
   const { data: notifications = [] } = useQuery({
     queryKey: ['notifications'],
     queryFn: () => api.get('/notifications').then(r => r.data),
-    refetchInterval: 60000, // poll every 60s
+    refetchInterval: 60_000,
   });
 
   const markRead = useMutation({
     mutationFn: (id) => api.patch(`/notifications/${id}/read`),
-    onSuccess: () => qc.invalidateQueries(['notifications']),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
 
   const markAllRead = useMutation({
     mutationFn: () => api.patch('/notifications/read-all'),
-    onSuccess: () => qc.invalidateQueries(['notifications']),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
 
   const unread = notifications.filter(n => !n.is_read).length;
 
   // Close on outside click
   useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const TYPE_ICON = { alert:'⚠️', payment:'💰', hr:'👥', project:'📁', system:'🔔', safety:'🛡️' };
+  const handleItemClick = (n) => {
+    if (!n.is_read) markRead.mutate(n.id);
+    setOpen(false);
+    if (n.link) navigate(n.link);
+  };
 
   return (
-    <div className="relative" ref={ref}>
-      <button onClick={() => setOpen(o => !o)} className="relative p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-navy-light">
-        🔔
+    <div ref={ref} style={{ position: 'relative' }}>
+      {/* Bell trigger */}
+      <button
+        className="icon-btn"
+        onClick={() => setOpen(o => !o)}
+        title="Notifications"
+        style={{ position: 'relative' }}
+      >
+        <Icon name="bell" size={16} />
         {unread > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center leading-none">
+          <span style={{
+            position: 'absolute', top: 6, right: 6,
+            minWidth: 16, height: 16, padding: '0 3px',
+            background: 'var(--danger)', color: '#fff',
+            fontSize: 9, fontWeight: 700, borderRadius: 99,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 0 0 2px var(--surface)', lineHeight: 1,
+            fontFamily: 'JetBrains Mono, monospace',
+          }}>
             {unread > 9 ? '9+' : unread}
           </span>
         )}
       </button>
 
+      {/* Dropdown panel */}
       {open && (
-        <div className="absolute right-0 top-11 w-80 bg-navy border border-navy-light rounded-xl shadow-2xl z-50 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-navy-light">
-            <span className="text-sm font-semibold text-white">Notifications</span>
+        <div style={{
+          position: 'absolute', right: 0, top: 'calc(100% + 8px)',
+          width: 320,
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 12,
+          boxShadow: 'var(--shadow-lg)',
+          zIndex: 100,
+          overflow: 'hidden',
+        }}>
+          {/* Header */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '10px 14px',
+            borderBottom: '1px solid var(--border)',
+          }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+              Notifications
+              {unread > 0 && (
+                <span style={{
+                  marginLeft: 6, fontSize: 10, fontWeight: 700,
+                  background: 'var(--accent-soft)', color: 'var(--accent-2)',
+                  borderRadius: 99, padding: '1px 6px',
+                }}>
+                  {unread} new
+                </span>
+              )}
+            </span>
             {unread > 0 && (
-              <button onClick={() => markAllRead.mutate()} className="text-xs text-gold hover:text-gold-light">
+              <button
+                onClick={() => markAllRead.mutate()}
+                style={{
+                  fontSize: 11, color: 'var(--accent-2)', background: 'none',
+                  border: 'none', cursor: 'pointer', padding: 0,
+                }}
+              >
                 Mark all read
               </button>
             )}
           </div>
 
-          <div className="max-h-96 overflow-y-auto">
+          {/* List */}
+          <div style={{ maxHeight: 380, overflowY: 'auto' }}>
             {notifications.length === 0 ? (
-              <div className="text-center py-10 text-gray-500 text-sm">You're all caught up 🎉</div>
+              <div style={{
+                padding: '32px 16px', textAlign: 'center',
+                color: 'var(--text-dim)', fontSize: 13,
+              }}>
+                You're all caught up 🎉
+              </div>
             ) : (
               notifications.slice(0, 20).map(n => (
-                <div
+                <button
                   key={n.id}
-                  onClick={() => { if (!n.is_read) markRead.mutate(n.id); }}
-                  className={`px-4 py-3 border-b border-navy-light cursor-pointer hover:bg-navy-light transition-colors ${!n.is_read ? 'bg-navy-light bg-opacity-50' : ''}`}
+                  onClick={() => handleItemClick(n)}
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 10,
+                    width: '100%', padding: '10px 14px',
+                    borderBottom: '1px solid var(--border)',
+                    background: !n.is_read ? 'var(--surface-2)' : 'transparent',
+                    border: 'none', borderBottom: '1px solid var(--border)',
+                    cursor: n.link ? 'pointer' : 'default',
+                    textAlign: 'left',
+                    transition: 'background .15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-2)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = !n.is_read ? 'var(--surface-2)' : 'transparent'; }}
                 >
-                  <div className="flex items-start gap-3">
-                    <span className="text-lg mt-0.5">{TYPE_ICON[n.type] || '🔔'}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium leading-snug ${!n.is_read ? 'text-white' : 'text-gray-300'}`}>{n.title}</p>
-                      <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{n.message}</p>
-                      <p className="text-xs text-gray-600 mt-1">
-                        {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
-                      </p>
-                    </div>
-                    {!n.is_read && <span className="w-2 h-2 rounded-full bg-gold mt-1.5 flex-shrink-0" />}
+                  <span style={{ fontSize: 16, lineHeight: 1, marginTop: 1, flexShrink: 0 }}>
+                    {TYPE_ICON[n.type] || '🔔'}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{
+                      margin: 0, fontSize: 12, fontWeight: n.is_read ? 400 : 600,
+                      color: n.is_read ? 'var(--text-dim)' : 'var(--text)',
+                      lineHeight: 1.4,
+                    }}>
+                      {n.title}
+                    </p>
+                    <p style={{
+                      margin: '2px 0 0', fontSize: 11, color: 'var(--text-dim)',
+                      lineHeight: 1.4,
+                      overflow: 'hidden', display: '-webkit-box',
+                      WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                    }}>
+                      {n.message}
+                    </p>
+                    <p style={{ margin: '3px 0 0', fontSize: 10, color: 'var(--text-mute)' }}>
+                      {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
+                    </p>
                   </div>
-                </div>
+                  {!n.is_read && (
+                    <span style={{
+                      width: 7, height: 7, borderRadius: '50%',
+                      background: 'var(--accent)', flexShrink: 0, marginTop: 4,
+                    }} />
+                  )}
+                </button>
               ))
             )}
           </div>

@@ -1,17 +1,21 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import useAuthStore from '../store/authStore';
 import Icon from '../components/Icon';
+import NotificationBell from '../components/NotificationBell';
+import api from '../lib/api';
 
 const NAV = [
   {
     section: 'Workspace',
     items: [
       { label: 'Dashboard',    path: '/dashboard',            icon: 'dashboard', end: true },
-      { label: 'Projects',     path: '/dashboard/projects',   icon: 'building',  badge: '7' },
+      { label: 'Projects',     path: '/dashboard/projects',   icon: 'building',  badgeKey: 'projects' },
+      { label: 'Pipeline',     path: '/dashboard/pipeline',   icon: 'trend' },
       { label: 'Finance',      path: '/dashboard/finance',    icon: 'money' },
-      { label: 'Invoicing',    path: '/dashboard/invoicing',  icon: 'doc',       badge: '3' },
-      { label: 'Tender / BQ',  path: '/dashboard/bq',         icon: 'hash',      badge: '12' },
+      { label: 'Invoicing',    path: '/dashboard/invoicing',  icon: 'doc',       badgeKey: 'invoices' },
+      { label: 'Tender / BQ',  path: '/dashboard/bq',         icon: 'hash',      badgeKey: 'bq' },
     ],
   },
   {
@@ -41,20 +45,7 @@ const NAV = [
   },
 ];
 
-const CMD_ITEMS = [
-  { label: 'Go to Dashboard',    path: '/dashboard',           icon: 'dashboard',  sub: 'Workspace overview' },
-  { label: 'Go to Projects',     path: '/dashboard/projects',  icon: 'building',   sub: '7 active' },
-  { label: 'Go to Finance',      path: '/dashboard/finance',   icon: 'money',      sub: 'Claims & payments' },
-  { label: 'Go to Invoicing',    path: '/dashboard/invoicing', icon: 'doc',        sub: '3 due this week' },
-  { label: 'Go to HR',           path: '/dashboard/hr',        icon: 'users',      sub: 'Attendance & payroll' },
-  { label: 'Go to CRM',          path: '/dashboard/crm',       icon: 'target',     sub: 'Clients & subcons' },
-  { label: 'Go to Safety',       path: '/dashboard/safety',    icon: 'shield',     sub: 'Incidents & SHASSIC' },
-  { label: 'Go to Fleet',        path: '/dashboard/fleet',     icon: 'truck',      sub: 'Vehicles & plant' },
-  { label: 'Go to Inventory',    path: '/dashboard/inventory', icon: 'inventory',  sub: '1,284 SKUs' },
-  { label: 'Go to Documents',    path: '/dashboard/documents', icon: 'paperclip',  sub: 'Drawings & contracts' },
-  { label: 'Go to Market Rates', path: '/dashboard/rates',     icon: 'market',     sub: 'Price benchmarks' },
-  { label: 'Go to Settings',     path: '/dashboard/settings',  icon: 'settings',   sub: 'Company & API config' },
-];
+// CMD_ITEMS built dynamically in DashboardLayout — see buildCmdItems()
 
 function BrandMark() {
   return (
@@ -70,14 +61,14 @@ function BrandMark() {
   );
 }
 
-function CommandPalette({ open, onClose }) {
+function CommandPalette({ open, onClose, items = [] }) {
   const [q, setQ] = useState('');
   const [focused, setFocused] = useState(0);
   const navigate = useNavigate();
 
   const results = q.trim()
-    ? CMD_ITEMS.filter(i => (i.label + i.sub).toLowerCase().includes(q.toLowerCase()))
-    : CMD_ITEMS;
+    ? items.filter(i => (i.label + i.sub).toLowerCase().includes(q.toLowerCase()))
+    : items;
 
   useEffect(() => { setFocused(0); }, [q]);
 
@@ -179,8 +170,59 @@ export default function DashboardLayout() {
   const initials = user?.name
     ? user.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
     : 'U';
+  const orgInitials = user?.company_name
+    ? user.company_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+    : (user?.name ? user.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() : 'MY');
 
   const sideWidth = sideMode === 'full' ? '240px' : '64px';
+
+  // ── Live sidebar badge counts ──────────────────────────────────────────────
+  const { data: projectsData } = useQuery({
+    queryKey: ['projects-list-count'],
+    queryFn: () => api.get('/projects').then(r => r.data),
+    staleTime: 5 * 60_000,
+  });
+  const { data: invoicesList = [] } = useQuery({
+    queryKey: ['invoices-unpaid-count'],
+    queryFn: () => api.get('/invoices?status=sent').then(r => r.data),
+    staleTime: 5 * 60_000,
+  });
+  const { data: bqList = [] } = useQuery({
+    queryKey: ['bq-pending-count'],
+    queryFn: () => api.get('/bq?status=pending').then(r => r.data),
+    staleTime: 5 * 60_000,
+  });
+  const { data: inventoryData } = useQuery({
+    queryKey: ['inventory-count'],
+    queryFn: () => api.get('/inventory').then(r => r.data),
+    staleTime: 10 * 60_000,
+  });
+
+  const projectsList = projectsData?.projects || projectsData || [];
+  const activeProjects = projectsList.filter(p => p.status === 'active').length;
+  const skuCount = (inventoryData?.items || inventoryData || []).length;
+
+  const BADGE_COUNTS = {
+    projects: projectsList.length || null,
+    invoices: invoicesList.length || null,
+    bq: bqList.length || null,
+  };
+
+  const CMD_ITEMS = [
+    { label: 'Go to Dashboard',    path: '/dashboard',           icon: 'dashboard',  sub: 'Workspace overview' },
+    { label: 'Go to Projects',     path: '/dashboard/projects',  icon: 'building',   sub: activeProjects ? `${activeProjects} active` : 'All projects' },
+    { label: 'Go to Pipeline',     path: '/dashboard/pipeline',  icon: 'trend',      sub: 'Lead→BQ→claim→paid' },
+    { label: 'Go to Finance',      path: '/dashboard/finance',   icon: 'money',      sub: 'Claims & payments' },
+    { label: 'Go to Invoicing',    path: '/dashboard/invoicing', icon: 'doc',        sub: invoicesList.length ? `${invoicesList.length} sent / awaiting payment` : 'All invoices' },
+    { label: 'Go to HR',           path: '/dashboard/hr',        icon: 'users',      sub: 'Attendance & payroll' },
+    { label: 'Go to CRM',          path: '/dashboard/crm',       icon: 'target',     sub: 'Clients & subcons' },
+    { label: 'Go to Safety',       path: '/dashboard/safety',    icon: 'shield',     sub: 'Incidents & SHASSIC' },
+    { label: 'Go to Fleet',        path: '/dashboard/fleet',     icon: 'truck',      sub: 'Vehicles & plant' },
+    { label: 'Go to Inventory',    path: '/dashboard/inventory', icon: 'inventory',  sub: skuCount ? `${skuCount} SKUs` : 'Materials & stock' },
+    { label: 'Go to Documents',    path: '/dashboard/documents', icon: 'paperclip',  sub: 'Drawings & contracts' },
+    { label: 'Go to Market Rates', path: '/dashboard/rates',     icon: 'market',     sub: 'Price benchmarks' },
+    { label: 'Go to Settings',     path: '/dashboard/settings',  icon: 'settings',   sub: 'Company & API config' },
+  ];
 
   return (
     <div className="app" style={{ '--sidebar-w': sideWidth }}>
@@ -218,8 +260,8 @@ export default function DashboardLayout() {
                       <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {item.label}
                       </span>
-                      {item.badge && (
-                        <span className="nav-badge">{item.badge}</span>
+                      {item.badgeKey && BADGE_COUNTS[item.badgeKey] > 0 && (
+                        <span className="nav-badge">{BADGE_COUNTS[item.badgeKey]}</span>
                       )}
                     </>
                   )}
@@ -240,10 +282,10 @@ export default function DashboardLayout() {
                   background: 'linear-gradient(135deg, var(--accent), var(--magenta))',
                   color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 9, fontWeight: 700, flexShrink: 0
-                }}>PB</div>
+                }}>{orgInitials}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="org-card-name">Permata Bina Group</div>
-                  <div className="org-card-tier">Pro · 24 seats</div>
+                  <div className="org-card-name">{user?.company_name || 'My Company'}</div>
+                  <div className="org-card-tier">{user?.subscription_tier || 'Free'}</div>
                 </div>
               </div>
               <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-dim)', display: 'flex', justifyContent: 'space-between' }}>
@@ -277,8 +319,8 @@ export default function DashboardLayout() {
             background: 'linear-gradient(135deg, var(--accent), var(--magenta))',
             color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 8, fontWeight: 700
-          }}>PB</div>
-          <span style={{ fontWeight: 600 }}>Permata Bina Group</span>
+          }}>{orgInitials}</div>
+          <span style={{ fontWeight: 600 }}>{user?.company_name || 'My Company'}</span>
           <Icon name="chevD" size={12} />
         </div>
 
@@ -294,14 +336,7 @@ export default function DashboardLayout() {
           }}>⌘K</kbd>
         </button>
 
-        <button className="icon-btn" title="Notifications" style={{ position: 'relative' }}>
-          <Icon name="bell" size={16} />
-          <span style={{
-            position: 'absolute', top: 7, right: 7,
-            width: 6, height: 6, background: 'var(--danger)',
-            borderRadius: '50%', boxShadow: '0 0 0 2px var(--surface)'
-          }} />
-        </button>
+        <NotificationBell />
 
         <div className="user-pill" title="Account">
           <div className="avatar">{initials}</div>
@@ -318,7 +353,7 @@ export default function DashboardLayout() {
         <Outlet />
       </main>
 
-      <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
+      <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} items={CMD_ITEMS} />
     </div>
   );
 }

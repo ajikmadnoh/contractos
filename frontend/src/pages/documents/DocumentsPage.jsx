@@ -3,6 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import api from '../../lib/api';
 
+const useProfiles = () => useQuery({
+  queryKey: ['profiles-all-docs'],
+  queryFn: () => api.get('/profiles').then(r => r.data || []),
+  staleTime: 5 * 60_000,
+});
+
 const DOC_CATEGORIES = [
   'All',
   'Contracts & LOA',
@@ -209,6 +215,7 @@ function DocumentGrid({ docs, onRefetch }) {
             <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500">
               {doc.category && <span>🏷️ {doc.category}</span>}
               {doc.project_name && <span>📁 {doc.project_name}</span>}
+              {doc.profile_name && <span>🏢 {doc.profile_name}</span>}
               <span>{fmtSize(doc.file_size)}</span>
               <span>📅 {new Date(doc.created_at).toLocaleDateString('en-MY')}</span>
               <span>👤 {doc.uploaded_by_name || '—'}</span>
@@ -239,8 +246,9 @@ function DocumentGrid({ docs, onRefetch }) {
 
 function UploadModal({ projects, defaultProjectId, onClose, onSuccess }) {
   const { register, handleSubmit, watch, formState: { isSubmitting } } = useForm({
-    defaultValues: { project_id: defaultProjectId || '', category: 'Other', send_for_approval: false },
+    defaultValues: { project_id: defaultProjectId || '', profile_id: '', category: 'Other', send_for_approval: false },
   });
+  const { data: profiles = [] } = useProfiles();
   const fileRef = useRef();
   const [dragOver, setDragOver] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -320,6 +328,17 @@ function UploadModal({ projects, defaultProjectId, onClose, onSuccess }) {
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
+          </div>
+          <div>
+            <label className="label">Linked Party <span style={{ color: 'var(--text-mute)', fontWeight: 400 }}>(optional — client, subcon or supplier)</span></label>
+            <select className="input-field" {...register('profile_id')}>
+              <option value="">— No linked party —</option>
+              {profiles.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.profile_type === 'client' ? '🤝' : p.profile_type === 'subcon' ? '🏗️' : p.profile_type === 'supplier' ? '📦' : '🏢'} {p.company_name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>

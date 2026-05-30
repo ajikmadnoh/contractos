@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate, authorize } = require('../middleware/auth');
+const automation = require('../services/automationService');
 
 router.use(authenticate);
 
@@ -56,7 +57,11 @@ router.patch('/leads/:id', async (req, res, next) => {
       RETURNING *
     `, [stage, title, client_name, estimated_value, tender_deadline, notes, req.params.id, req.tenant_id]);
     if (!rows.length) return res.status(404).json({ error: 'Lead not found' });
-    res.json({ lead: rows[0] });
+    const lead = rows[0];
+    if (stage === 'won' && lead.stage === 'won') {
+      automation.notifyLeadWon(lead, req.tenant_id).catch(e => console.error('[automation] lead won notify failed:', e.message));
+    }
+    res.json({ lead });
   } catch (err) { next(err); }
 });
 

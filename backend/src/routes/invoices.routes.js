@@ -4,6 +4,7 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { ROLES } = require('../config/constants');
 const { query, withTransaction } = require('../config/database');
 const { v4: uuidv4 } = require('uuid');
+const automation = require('../services/automationService');
 
 // GET /invoices
 router.get('/', authenticate, async (req, res, next) => {
@@ -61,6 +62,7 @@ router.post('/', authenticate, authorize(ROLES.DIRECTOR, ROLES.ADMIN, ROLES.FINA
       }
       return inv.rows[0];
     });
+    automation.notifyInvoiceEvent(invoice, req.user.tenant_id).catch(e => console.error('[automation] invoice created notify failed:', e.message));
     res.status(201).json(invoice);
   } catch (err) {
     next(err);
@@ -76,7 +78,11 @@ router.patch('/:id/status', authenticate, authorize(ROLES.DIRECTOR, ROLES.ADMIN,
       [status, amountPaid, req.params.id, req.user.tenant_id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Invoice not found.' });
-    res.json(result.rows[0]);
+    const inv = result.rows[0];
+    if (status === 'paid' || status === 'sent') {
+      automation.notifyInvoiceEvent(inv, req.user.tenant_id).catch(e => console.error('[automation] invoice status notify failed:', e.message));
+    }
+    res.json(inv);
   } catch (err) { next(err); }
 });
 

@@ -193,6 +193,13 @@ function CertificationsTab() {
     queryKey: ['safety-certs'],
     queryFn: () => api.get('/safety/certifications').then(r => r.data),
   });
+  const { data: orgProfiles = [] } = useQuery({
+    queryKey: ['profiles-orgs'],
+    queryFn: () => api.get('/profiles').then(r =>
+      (r.data || []).filter(p => ['subcon', 'organisation', 'main_contractor'].includes(p.profile_type))
+    ),
+    staleTime: 5 * 60_000,
+  });
   const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm();
   const create = useMutation({
     mutationFn: d => api.post('/safety/certifications', d),
@@ -239,7 +246,10 @@ function CertificationsTab() {
                 return (
                   <tr key={cert.id} className="border-b border-navy-light/50 hover:bg-navy-light/30">
                     <td className="py-3 px-4 text-white font-medium">{cert.cert_type}</td>
-                    <td className="py-3 px-4 text-gray-300">{cert.holder_name || cert.profile_name || '—'}</td>
+                    <td className="py-3 px-4">
+                      <p className="text-gray-300">{cert.holder_name || '—'}</p>
+                      {cert.profile_name && <p style={{ fontSize: 11, color: 'var(--text-mute)' }}>{cert.profile_name}</p>}
+                    </td>
                     <td className="py-3 px-4 text-gray-400 font-mono text-xs">{cert.cert_number || '—'}</td>
                     <td className="py-3 px-4 text-gray-400">{cert.issue_date ? new Date(cert.issue_date).toLocaleDateString('en-MY') : '—'}</td>
                     <td className="py-3 px-4 text-gray-400">{cert.expiry_date ? new Date(cert.expiry_date).toLocaleDateString('en-MY') : 'No Expiry'}</td>
@@ -278,6 +288,15 @@ function CertificationsTab() {
                   <option>Electrical (ST Licence)</option>
                   <option>Forklift Operator</option>
                   <option>Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Linked Company <span style={{ color: 'var(--text-mute)', fontWeight: 400 }}>(optional)</span></label>
+                <select className="input-field" {...register('profile_id')}>
+                  <option value="">— No company linked —</option>
+                  {orgProfiles.map(p => (
+                    <option key={p.id} value={p.id}>{p.company_name}</option>
+                  ))}
                 </select>
               </div>
               <div>

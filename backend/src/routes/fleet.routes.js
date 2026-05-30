@@ -9,6 +9,10 @@ router.use(authenticate);
 router.get('/vehicles', async (req, res, next) => {
   try {
     const { db } = req;
+    const { project_id } = req.query;
+    const params = [req.tenant_id];
+    let where = 'fv.tenant_id = $1';
+    if (project_id) { params.push(project_id); where += ` AND fv.assigned_project_id = $${params.length}`; }
     const { rows } = await db.query(`
       SELECT fv.*,
         fv.registration_number AS plate_number,
@@ -17,9 +21,9 @@ router.get('/vehicles', async (req, res, next) => {
         p.name                 AS assigned_project
       FROM fleet_vehicles fv
       LEFT JOIN projects p ON p.id = fv.assigned_project_id
-      WHERE fv.tenant_id = $1
+      WHERE ${where}
       ORDER BY fv.name ASC NULLS LAST
-    `, [req.tenant_id]);
+    `, params);
     res.json({ vehicles: rows });
   } catch (err) { next(err); }
 });

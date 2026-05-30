@@ -71,6 +71,24 @@ export default function FinancePage() {
     }
   };
 
+  // Derive real KPIs from live invoice data when cockpit endpoint returns null
+  const { data: allInvoices = [] } = useQuery({
+    queryKey: ['invoices-all'],
+    queryFn: () => api.get('/invoices').then(r => r.data || []),
+    staleTime: 3 * 60_000,
+  });
+  const totalReceivables = allInvoices
+    .filter(i => ['unpaid', 'overdue', 'partially_paid', 'sent'].includes(i.status))
+    .reduce((s, i) => s + parseFloat(i.total || 0), 0);
+  const overdueInvoices = allInvoices.filter(i => i.status === 'overdue').length;
+  const sentInvoices = allInvoices.filter(i => i.status === 'sent').length;
+
+  // Current accounting period
+  const now = new Date();
+  const periodLabel = now.toLocaleDateString('en-MY', { month: 'long', year: 'numeric' });
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const closesLabel = `${lastDay} ${now.toLocaleDateString('en-MY', { month: 'short' })}`;
+
   return (
     <div className="fin">
       <div className="page-head">
@@ -82,11 +100,16 @@ export default function FinancePage() {
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px 4px 6px', border: '1px solid var(--border)', borderRadius: 999, background: 'var(--surface-2)', fontSize: 11.5 }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--good)', boxShadow: '0 0 0 3px var(--good-soft)' }} />
             <span style={{ color: 'var(--text-dim)' }}>Period</span>
-            <span style={{ fontWeight: 600 }}>Apr 2026</span>
+            <span style={{ fontWeight: 600 }}>{periodLabel}</span>
             <span style={{ color: 'var(--text-mute)' }}>·</span>
             <span style={{ color: 'var(--text-dim)' }}>Closes</span>
-            <span style={{ fontWeight: 600 }}>30 May</span>
+            <span style={{ fontWeight: 600 }}>{closesLabel}</span>
           </div>
+          {overdueInvoices > 0 && (
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: 'var(--danger-soft,rgba(239,68,68,.15))', color: 'var(--danger)' }}>
+              ⚠ {overdueInvoices} overdue invoice{overdueInvoices !== 1 ? 's' : ''}
+            </span>
+          )}
           <button className="btn ghost"><Icon name="filter" size={14} /> Filter</button>
           <button className="btn"><Icon name="download" size={14} /> Export</button>
           <button className="btn primary" onClick={() => setShowNewPC(true)}><Icon name="plus" size={14} /> New PC</button>
@@ -96,7 +119,7 @@ export default function FinancePage() {
       <div className="tabs">
         {TABS.map(x => {
           let badge = x.badge;
-          if (x.badgeKey === 'receivables') badge = cockpit?.kpis?.receivables || fmtShort(38_420_000);
+          if (x.badgeKey === 'receivables') badge = cockpit?.kpis?.receivables || (totalReceivables > 0 ? fmtShort(totalReceivables) : undefined);
           if (x.badgeKey === 'certCount') badge = String(certs.length || 8);
           return (
             <button key={x.id} aria-current={tab === x.id ? 'page' : undefined} onClick={() => setTab(x.id)}>
@@ -111,7 +134,18 @@ export default function FinancePage() {
       {showNewPC && <NewPCModal onClose={() => setShowNewPC(false)} />}
 
       <div className="page-body" style={{ paddingTop: 12 }}>
-        {tab === 'cockpit' && <FinanceCockpit live={cockpit || {}} statutory={statutory} matrix={aging} />}
+        {tab === 'cockpit' && <FinanceCockpit
+          live={{
+            ...(cockpit || {}),
+            kpis: {
+              ...(cockpit?.kpis || {}),
+              receivables: cockpit?.kpis?.receivables || (totalReceivables > 0 ? fmtShort(totalReceivables) : undefined),
+              receivablesFoot: cockpit?.kpis?.receivablesFoot || (allInvoices.length > 0 ? `${sentInvoices + overdueInvoices} open invoices` : undefined),
+            },
+          }}
+          statutory={statutory}
+          matrix={aging}
+        />}
         {tab === 'ar'      && <FinanceReceivables matrix={aging} dunning={dunning} onSendAll={sendAllReminders} />}
         {tab === 'certs'   && <FinancePaymentCerts certs={certs} />}
         {tab === 'retent'  && <FinanceRetention ledger={retention} bonds={bonds} />}

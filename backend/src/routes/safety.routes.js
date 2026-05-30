@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate, authorize } = require('../middleware/auth');
+const automation = require('../services/automationService');
 
 router.use(authenticate);
 
@@ -9,14 +10,18 @@ router.use(authenticate);
 router.get('/incidents', async (req, res, next) => {
   try {
     const { db } = req;
+    const { project_id } = req.query;
+    const params = [req.tenant_id];
+    let where = 'si.tenant_id = $1';
+    if (project_id) { params.push(project_id); where += ` AND si.project_id = $${params.length}`; }
     const { rows } = await db.query(`
       SELECT si.*, u.name AS reported_by_name, p.name AS project_name
       FROM safety_incidents si
       LEFT JOIN users u ON u.id = si.reported_by
       LEFT JOIN projects p ON p.id = si.project_id
-      WHERE si.tenant_id = $1
+      WHERE ${where}
       ORDER BY si.incident_date DESC
-    `, [req.tenant_id]);
+    `, params);
     res.json({ incidents: rows });
   } catch (err) { next(err); }
 });
@@ -31,7 +36,9 @@ router.post('/incidents', async (req, res, next) => {
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'open')
       RETURNING *
     `, [req.tenant_id, project_id || null, title, severity || 'near_miss', incident_date, location, description, corrective_action, !!lost_time, req.user.id]);
-    res.status(201).json({ incident: rows[0] });
+    const incident = rows[0];
+    automation.notifyIncidentReported(incident, req.tenant_id).catch(e => console.error('[automation] incident notify failed:', e.message));
+    res.status(201).json({ incident });
   } catch (err) { next(err); }
 });
 

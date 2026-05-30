@@ -400,16 +400,30 @@ function LeaveTab({ leaves, isLoading, qc }) {
 
 // ── Workforce tab ──────────────────────────────────────────────────────────────
 function WorkforceTab() {
-  // Synthetic workforce data — will be replaced when backend exposes /hr/workforce
+  const { data: projectsData } = useQuery({
+    queryKey: ['projects-workforce'],
+    queryFn: () => api.get('/projects').then(r => r.data),
+    staleTime: 5 * 60_000,
+  });
+  const { data: usersData } = useQuery({
+    queryKey: ['users-workforce'],
+    queryFn: () => api.get('/users').then(r => r.data),
+    staleTime: 5 * 60_000,
+  });
+
+  const activeProjects = (projectsData?.projects || projectsData || []).filter(p => p.status === 'active');
+  const totalUsers = (usersData?.users || usersData || []).length;
+
+  // Synthetic trade breakdown — will be replaced when backend exposes /hr/workforce
   const TRADES = [
-    { trade: 'General Workers',  count: 84, sites: ['PVDH-T3', 'ISKP-2', 'PNS-HUB'] },
-    { trade: 'Carpenters',       count: 32, sites: ['PVDH-T3', 'KLCC-EB'] },
-    { trade: 'Bar Benders',      count: 28, sites: ['PNS-HUB', 'CYB-DC4'] },
-    { trade: 'Concreters',       count: 24, sites: ['PVDH-T3', 'PUTJ-OB'] },
-    { trade: 'Plumbers (M&E)',   count: 19, sites: ['CYB-DC4', 'ISKP-2'] },
-    { trade: 'Electricians',     count: 17, sites: ['CYB-DC4', 'KKM-RES'] },
-    { trade: 'Welders',          count: 14, sites: ['KLCC-EB', 'PNS-HUB'] },
-    { trade: 'Supervisors',      count: 12, sites: ['PVDH-T3', 'ISKP-2', 'PNS-HUB', 'KLCC-EB'] },
+    { trade: 'General Workers',  count: 84 },
+    { trade: 'Carpenters',       count: 32 },
+    { trade: 'Bar Benders',      count: 28 },
+    { trade: 'Concreters',       count: 24 },
+    { trade: 'Plumbers (M&E)',   count: 19 },
+    { trade: 'Electricians',     count: 17 },
+    { trade: 'Welders',          count: 14 },
+    { trade: 'Supervisors',      count: 12 },
   ];
   const total = TRADES.reduce((s, t) => s + t.count, 0);
   const maxCount = Math.max(...TRADES.map(t => t.count));
@@ -419,10 +433,10 @@ function WorkforceTab() {
       {/* KPI row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 12 }}>
         {[
-          { label: 'Total headcount', value: total,                foot: 'across all sites' },
-          { label: 'Trades / skills', value: TRADES.length,       foot: 'categories', tone: 'info' },
-          { label: 'Active sites',    value: 7,                    foot: 'with crew deployed', tone: 'good' },
-          { label: 'Foreign workers', value: '~60%',              foot: 'est. of headcount', tone: 'warn' },
+          { label: 'Total headcount', value: total,                 foot: 'est. site crew (sample)' },
+          { label: 'Registered users', value: totalUsers || '—',   foot: 'on ContractOS', tone: 'info' },
+          { label: 'Active projects',  value: activeProjects.length || '—', foot: 'with crew deployed', tone: 'good' },
+          { label: 'Foreign workers',  value: '~60%',               foot: 'est. of headcount', tone: 'warn' },
         ].map((k, i) => (
           <div key={i} className="card" style={{ padding: '12px 16px' }}>
             <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-mute)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em' }}>{k.label}</div>
@@ -460,43 +474,43 @@ function WorkforceTab() {
           </div>
         </div>
 
-        {/* Site deployment table */}
+        {/* Site deployment table — live projects */}
         <div className="card">
           <div className="card-head">
             <h3>Site deployment</h3>
-            <span className="page-sub">Estimated crew count per project</span>
+            <span className="page-sub">{activeProjects.length} active project{activeProjects.length !== 1 ? 's' : ''}</span>
           </div>
           <div style={{ overflowX: 'auto' }}>
-            <table className="tbl">
-              <thead>
-                <tr><th>Project</th><th>Crew</th><th>Trades</th><th>Status</th></tr>
-              </thead>
-              <tbody>
-                {[
-                  { code: 'PVDH-T3',  name: 'Pavilion Damansara Hts — T3', crew: 184, trades: 6, status: 'live' },
-                  { code: 'ISKP-2',   name: 'Iskandar Puteri Res — Ph 2',  crew: 142, trades: 5, status: 'live' },
-                  { code: 'PNS-HUB',  name: 'Penang Sentral Hub',           crew:  96, trades: 5, status: 'live' },
-                  { code: 'CYB-DC4',  name: 'Cyberjaya Data Center 4',      crew:  67, trades: 4, status: 'live' },
-                  { code: 'KLCC-EB',  name: 'KLCC East Carriage Bridge',     crew:  58, trades: 3, status: 'live' },
-                  { code: 'PUTJ-OB',  name: 'Putrajaya Boulevard Office',    crew:  41, trades: 3, status: 'live' },
-                  { code: 'KKM-RES',  name: 'Kota Kinabalu Marina Resort',   crew:  22, trades: 2, status: 'closing' },
-                ].map(r => (
-                  <tr key={r.code}>
-                    <td>
-                      <div style={{ fontWeight: 600, fontSize: 12 }}>{r.name}</div>
-                      <div style={{ fontSize: 10.5, color: 'var(--text-dim)', fontFamily: 'JetBrains Mono, monospace' }}>{r.code}</div>
-                    </td>
-                    <td style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 700 }}>{r.crew}</td>
-                    <td style={{ color: 'var(--text-dim)', fontSize: 11.5 }}>{r.trades} trades</td>
-                    <td>
-                      <span className={`pill ${r.status === 'closing' ? 'info' : 'good'}`} style={{ fontSize: 10.5 }}>
-                        {r.status === 'closing' ? 'Closing' : 'Live'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {activeProjects.length === 0 ? (
+              <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-mute)', fontSize: 13 }}>
+                No active projects found.
+              </div>
+            ) : (
+              <table className="tbl">
+                <thead>
+                  <tr><th>Project</th><th>Phase</th><th>Contract Sum</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                  {activeProjects.map(p => (
+                    <tr key={p.id}>
+                      <td>
+                        <div style={{ fontWeight: 600, fontSize: 12 }}>{p.name}</div>
+                        {p.site_address && <div style={{ fontSize: 10.5, color: 'var(--text-dim)' }}>{p.site_address}</div>}
+                      </td>
+                      <td style={{ color: 'var(--text-dim)', fontSize: 11.5, textTransform: 'capitalize' }}>
+                        {p.project_phase?.replace('_', ' ') || '—'}
+                      </td>
+                      <td style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11.5, color: 'var(--text-dim)' }}>
+                        {p.contract_sum ? `RM ${parseFloat(p.contract_sum).toLocaleString('en-MY', { maximumFractionDigits: 0 })}` : '—'}
+                      </td>
+                      <td>
+                        <span className="pill good" style={{ fontSize: 10.5 }}>Active</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       </div>
@@ -659,15 +673,21 @@ function ForeignWorkersTab() {
 
 // ── Payroll tab ────────────────────────────────────────────────────────────────
 function PayrollTab() {
-  const months = ['Jan 2026', 'Feb 2026', 'Mar 2026', 'Apr 2026', 'May 2026'];
+  // Generate last 5 months dynamically
+  const now = new Date();
+  const months = Array.from({ length: 5 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (4 - i), 1);
+    return d.toLocaleDateString('en-MY', { month: 'short', year: 'numeric' });
+  });
+  const baseGross = 820000;
   const payrollData = months.map((m, i) => ({
     month: m,
     headcount: 580 + i * 8,
-    gross: 820000 + i * 15000,
-    epf: (820000 + i * 15000) * 0.13,
-    socso: (820000 + i * 15000) * 0.015,
-    eis: (820000 + i * 15000) * 0.004,
-    net: (820000 + i * 15000) * 0.851,
+    gross: baseGross + i * 15000,
+    epf: (baseGross + i * 15000) * 0.13,
+    socso: (baseGross + i * 15000) * 0.015,
+    eis: (baseGross + i * 15000) * 0.004,
+    net: (baseGross + i * 15000) * 0.851,
     status: i < 4 ? 'processed' : 'draft',
   }));
   const fmt = (n) => `RM ${(n / 1000).toFixed(0)}K`;
@@ -677,7 +697,7 @@ function PayrollTab() {
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 12 }}>
         {[
-          { label: 'May 2026 gross payroll', value: fmt(payrollData[4].gross), foot: 'current month estimate', tone: 'accent' },
+          { label: `${months[4]} gross payroll`, value: fmt(payrollData[4].gross), foot: 'current month estimate', tone: 'accent' },
           { label: 'EPF + SOCSO + EIS',      value: fmt(payrollData[4].epf + payrollData[4].socso + payrollData[4].eis), foot: 'statutory contributions', tone: 'warn' },
           { label: 'Net payout',             value: fmt(payrollData[4].net), foot: '~85.1% of gross' },
           { label: 'Headcount (billed)',     value: payrollData[4].headcount, foot: 'staff on payroll' },

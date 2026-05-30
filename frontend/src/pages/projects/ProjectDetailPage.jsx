@@ -66,6 +66,19 @@ export default function ProjectDetailPage() {
     queryKey: ['project-risks', id],
     queryFn: () => api.get(`/projects/${id}/risks`).then(r => r.data).catch(() => []),
   });
+  const { data: claims = [] } = useQuery({
+    queryKey: ['project-claims', id],
+    queryFn: () => api.get(`/finance/claims?projectId=${id}`).then(r => r.data).catch(() => []),
+  });
+  const { data: certs = [] } = useQuery({
+    queryKey: ['project-certs', id],
+    queryFn: () => api.get(`/finance/payment-certs?projectId=${id}`).then(r => r.data).catch(() => []),
+  });
+  const { data: docsData } = useQuery({
+    queryKey: ['project-docs', id],
+    queryFn: () => api.get(`/documents?project_id=${id}`).then(r => r.data).catch(() => ({ documents: [] })),
+  });
+  const projectDocs = docsData?.documents ?? [];
 
   if (isLoading) return (
     <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-mute)' }}>
@@ -158,8 +171,9 @@ export default function ProjectDetailPage() {
         <div className="tabs" style={{ margin: '0 -32px', padding: '0 32px' }}>
           {DETAIL_TABS.map(t => {
             let badge = null;
-            if (t.id === 'commercial') badge = openCOs + changeOrders.length;
+            if (t.id === 'commercial') badge = openCOs + claims.filter(c => c.status === 'draft').length;
             if (t.id === 'quality')    badge = openRFIs + openSubmittals;
+            if (t.id === 'documents')  badge = projectDocs.filter(d => d.status === 'pending_approval').length || null;
             return (
               <button key={t.id} className={`tab${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
                 <Icon name={t.icon} size={12} /> {t.label}
@@ -177,11 +191,11 @@ export default function ProjectDetailPage() {
       <div className="page-body">
         {tab === 'overview'   && <OverviewTab   p={p} rfis={rfis} changeOrders={changeOrders} risks={risks} pct={pct} />}
         {tab === 'programme'  && <ProgrammeTab  p={p} />}
-        {tab === 'commercial' && <CommercialTab p={p} changeOrders={changeOrders} />}
+        {tab === 'commercial' && <CommercialTab p={p} changeOrders={changeOrders} claims={claims} certs={certs} />}
         {tab === 'tracking'   && <TrackingTab   p={p} />}
         {tab === 'quality'    && <QualityTab    p={p} rfis={rfis} submittals={submittals} />}
         {tab === 'team'       && <TeamTab       p={p} />}
-        {tab === 'documents'  && <DocumentsTab  p={p} />}
+        {tab === 'documents'  && <DocumentsTab  p={p} docs={projectDocs} />}
       </div>
     </>
   );
@@ -509,15 +523,22 @@ function ProgrammeTab({ p }) {
 }
 
 // ── Commercial tab ────────────────────────────────────────────────────────────
-function CommercialTab({ p, changeOrders }) {
+function CommercialTab({ p, changeOrders, claims, certs }) {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [showAdd, setShowAdd] = useState(false);
   const [filterCO, setFilterCO] = useState('all');
+  const [commercialView, setCommercialView] = useState('co'); // 'co' | 'claims' | 'certs'
 
   const approved = changeOrders.filter(co => co.status === 'approved');
   const open     = changeOrders.filter(co => ['pending_approval','submitted'].includes(co.status));
   const approvedVal = approved.reduce((s, co) => s + parseFloat(co.cost_change || 0), 0);
   const openVal     = open.reduce((s, co) => s + parseFloat(co.cost_change || 0), 0);
+
+  // Claim summary
+  const totalClaimed = claims.reduce((s, c) => s + parseFloat(c.amount || 0), 0);
+  const totalCertified = certs.reduce((s, c) => s + parseFloat(c.certified_amount || 0), 0);
+  const totalPaid = certs.filter(c => c.status === 'paid').reduce((s, c) => s + parseFloat(c.certified_amount || 0), 0);
 
   const filteredCOs = changeOrders.filter(co => {
     if (filterCO === 'open') return ['pending_approval','submitted'].includes(co.status);
@@ -527,17 +548,21 @@ function CommercialTab({ p, changeOrders }) {
 
   const approveCO = useMutation({
     mutationFn: (coId) => api.patch(`/projects/${p.id}/change-orders/${coId}`, { status: 'approved' }),
-    onSuccess: () => qc.invalidateQueries(['project-change-orders', p.id]),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['project-change-orders', p.id] }),
   });
+
+  const claimPill = (s) => s === 'approved' ? 'good' : s === 'rejected' ? 'danger' : s === 'submitted' ? 'info' : 'muted';
+  const certPill  = (s) => s === 'paid' ? 'good' : s === 'partially_paid' ? 'info' : s === 'certified' ? 'accent' : 'muted';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* ── KPI row ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 12 }}>
         {[
-          { label: 'Base contract',   value: fmt(parseFloat(p.contract_sum || 0) - approvedVal), foot: 'LOA value' },
-          { label: 'Approved COs',    value: fmt(approvedVal), foot: `${approved.length} approved`, tone: approvedVal >= 0 ? 'good' : 'danger' },
-          { label: 'Open exposure',   value: fmt(openVal), foot: `${open.length} pending`, tone: 'warn' },
-          { label: 'Revised contract', value: fmt(parseFloat(p.contract_sum || 0) + approvedVal), foot: 'incl. approved' },
+          { label: 'Base contract',    value: fmt(parseFloat(p.contract_sum || 0)), foot: 'LOA value' },
+          { label: 'Approved COs',     value: fmt(approvedVal), foot: `${approved.length} approved`, tone: approvedVal >= 0 ? 'good' : 'danger' },
+          { label: 'Total claimed',    value: fmt(totalClaimed), foot: `${claims.length} claims`, tone: 'accent' },
+          { label: 'Paid to date',     value: fmt(totalPaid), foot: `${certs.filter(c=>c.status==='paid').length} certs`, tone: 'good' },
         ].map((k, i) => (
           <div key={i} className="card" style={{ padding: '12px 16px' }}>
             <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-mute)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em' }}>{k.label}</div>
@@ -547,72 +572,175 @@ function CommercialTab({ p, changeOrders }) {
         ))}
       </div>
 
-      <div className="card">
-        <div className="card-head">
-          <h3>Change Orders / Variations</h3>
-          <span className="page-sub">{changeOrders.length} on file · {open.length} pending</span>
-          <div style={{ flex: 1 }} />
-          <div className="seg-toggle">
-            <button aria-pressed={filterCO === 'all'}      onClick={() => setFilterCO('all')}>All ({changeOrders.length})</button>
-            <button aria-pressed={filterCO === 'open'}     onClick={() => setFilterCO('open')}>Open ({open.length})</button>
-            <button aria-pressed={filterCO === 'approved'} onClick={() => setFilterCO('approved')}>Approved</button>
-          </div>
+      {/* ── View toggle ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="seg-toggle">
+          <button aria-pressed={commercialView === 'co'}     onClick={() => setCommercialView('co')}>Change Orders ({changeOrders.length})</button>
+          <button aria-pressed={commercialView === 'claims'} onClick={() => setCommercialView('claims')}>Claims ({claims.length})</button>
+          <button aria-pressed={commercialView === 'certs'}  onClick={() => setCommercialView('certs')}>Payment Certs ({certs.length})</button>
+        </div>
+        <div style={{ flex: 1 }} />
+        {commercialView === 'claims' && (
+          <button className="btn sm primary" onClick={() => navigate('/dashboard/finance')}>
+            <Icon name="plus" size={12} /> New Claim
+          </button>
+        )}
+        {commercialView === 'co' && (
           <button className="btn sm primary" onClick={() => setShowAdd(true)}>
             <Icon name="plus" size={12} /> Raise CO
           </button>
-        </div>
-        {filteredCOs.length === 0 ? (
-          <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-mute)', fontSize: 12 }}>No change orders yet.</div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>CO #</th><th>Title</th><th>Origin</th><th>Status</th>
-                  <th className="tbl-mono">Cost</th><th className="tbl-mono">Time</th>
-                  <th className="tbl-mono">Raised</th><th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredCOs.map(co => (
-                  <tr key={co.id}>
-                    <td style={{ fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>{co.co_number}</td>
-                    <td>{co.title}</td>
-                    <td style={{ color: 'var(--text-dim)', fontSize: 11 }}>{co.origin || '—'}</td>
-                    <td>
-                      <span className={`pill ${
-                        co.status === 'approved' ? 'good' :
-                        co.status === 'rejected' ? 'danger' :
-                        co.status === 'pending_approval' ? 'warn' : 'info'
-                      }`}>
-                        {co.status?.replace(/_/g, ' ')}
-                      </span>
-                    </td>
-                    <td className="tbl-mono" style={{ color: parseFloat(co.cost_change) >= 0 ? 'var(--good)' : 'var(--danger)', fontWeight: 600 }}>
-                      {parseFloat(co.cost_change) >= 0 ? '+' : ''}{fmt(co.cost_change)}
-                    </td>
-                    <td className="tbl-mono" style={{ color: 'var(--text-dim)' }}>{co.time_change ? `${co.time_change}d` : '—'}</td>
-                    <td className="tbl-mono" style={{ color: 'var(--text-dim)', fontSize: 11 }}>{co.created_at?.slice(0,10)}</td>
-                    <td>
-                      {co.status === 'pending_approval' && (
-                        <button className="btn sm ghost" onClick={() => approveCO.mutate(co.id)}>
-                          <Icon name="check" size={11} /> Approve
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         )}
       </div>
+
+      {/* ── Change Orders panel ── */}
+      {commercialView === 'co' && (
+        <div className="card">
+          <div className="card-head">
+            <h3>Change Orders / Variations</h3>
+            <span className="page-sub">{changeOrders.length} on file · {open.length} pending</span>
+            <div style={{ flex: 1 }} />
+            <div className="seg-toggle">
+              <button aria-pressed={filterCO === 'all'}      onClick={() => setFilterCO('all')}>All ({changeOrders.length})</button>
+              <button aria-pressed={filterCO === 'open'}     onClick={() => setFilterCO('open')}>Open ({open.length})</button>
+              <button aria-pressed={filterCO === 'approved'} onClick={() => setFilterCO('approved')}>Approved</button>
+            </div>
+          </div>
+          {filteredCOs.length === 0 ? (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-mute)', fontSize: 12 }}>No change orders yet.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>CO #</th><th>Title</th><th>Origin</th><th>Status</th>
+                    <th className="tbl-mono">Cost</th><th className="tbl-mono">Time</th>
+                    <th className="tbl-mono">Raised</th><th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredCOs.map(co => (
+                    <tr key={co.id}>
+                      <td style={{ fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>{co.co_number}</td>
+                      <td>{co.title}</td>
+                      <td style={{ color: 'var(--text-dim)', fontSize: 11 }}>{co.origin || '—'}</td>
+                      <td>
+                        <span className={`pill ${
+                          co.status === 'approved' ? 'good' :
+                          co.status === 'rejected' ? 'danger' :
+                          co.status === 'pending_approval' ? 'warn' : 'info'
+                        }`}>
+                          {co.status?.replace(/_/g, ' ')}
+                        </span>
+                      </td>
+                      <td className="tbl-mono" style={{ color: parseFloat(co.cost_change) >= 0 ? 'var(--good)' : 'var(--danger)', fontWeight: 600 }}>
+                        {parseFloat(co.cost_change) >= 0 ? '+' : ''}{fmt(co.cost_change)}
+                      </td>
+                      <td className="tbl-mono" style={{ color: 'var(--text-dim)' }}>{co.time_change ? `${co.time_change}d` : '—'}</td>
+                      <td className="tbl-mono" style={{ color: 'var(--text-dim)', fontSize: 11 }}>{co.created_at?.slice(0,10)}</td>
+                      <td>
+                        {co.status === 'pending_approval' && (
+                          <button className="btn sm ghost" onClick={() => approveCO.mutate(co.id)}>
+                            <Icon name="check" size={11} /> Approve
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Claims panel ── */}
+      {commercialView === 'claims' && (
+        <div className="card">
+          <div className="card-head">
+            <h3>Progress Claims</h3>
+            <span className="page-sub">{claims.length} claims · total {fmt(totalClaimed)}</span>
+          </div>
+          {claims.length === 0 ? (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-mute)', fontSize: 12 }}>
+              No claims raised for this project yet.
+              <br />
+              <button className="btn sm ghost" style={{ marginTop: 12 }} onClick={() => navigate('/dashboard/finance')}>
+                Go to Finance
+              </button>
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Claim #</th><th>Type</th><th>Status</th>
+                    <th className="tbl-mono">Amount</th><th className="tbl-mono">Retention</th>
+                    <th className="tbl-mono">Net</th><th className="tbl-mono">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {claims.map(c => (
+                    <tr key={c.id}>
+                      <td style={{ fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>{c.claim_number}</td>
+                      <td style={{ fontSize: 11, color: 'var(--text-dim)' }}>{c.claim_type?.replace(/_/g,' ') || '—'}</td>
+                      <td><span className={`pill ${claimPill(c.status)}`}>{c.status?.replace(/_/g,' ')}</span></td>
+                      <td className="tbl-mono">{fmt(c.amount)}</td>
+                      <td className="tbl-mono" style={{ color: 'var(--warn)' }}>{fmt(c.retention_amount)}</td>
+                      <td className="tbl-mono" style={{ fontWeight: 600 }}>{fmt(c.net_amount)}</td>
+                      <td className="tbl-mono" style={{ color: 'var(--text-dim)', fontSize: 11 }}>{c.claim_date?.slice(0,10) || c.created_at?.slice(0,10)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Payment Certs panel ── */}
+      {commercialView === 'certs' && (
+        <div className="card">
+          <div className="card-head">
+            <h3>Payment Certificates</h3>
+            <span className="page-sub">{certs.length} certs · certified {fmt(totalCertified)} · paid {fmt(totalPaid)}</span>
+          </div>
+          {certs.length === 0 ? (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-mute)', fontSize: 12 }}>
+              No payment certificates issued for this project yet.
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Cert #</th><th>Status</th>
+                    <th className="tbl-mono">Certified</th><th className="tbl-mono">Paid</th>
+                    <th className="tbl-mono">Due</th><th className="tbl-mono">Paid on</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {certs.map(c => (
+                    <tr key={c.id}>
+                      <td style={{ fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>{c.cert_number || c.id?.slice(0,8)}</td>
+                      <td><span className={`pill ${certPill(c.status)}`}>{c.status?.replace(/_/g,' ')}</span></td>
+                      <td className="tbl-mono">{fmt(c.certified_amount)}</td>
+                      <td className="tbl-mono" style={{ color: 'var(--good)', fontWeight: 600 }}>{fmt(c.amount_paid || 0)}</td>
+                      <td className="tbl-mono" style={{ color: 'var(--text-dim)' }}>{c.due_date?.slice(0,10) || '—'}</td>
+                      <td className="tbl-mono" style={{ color: 'var(--text-dim)' }}>{c.paid_date?.slice(0,10) || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {showAdd && (
         <AddChangeOrderModal
           projectId={p.id}
           onClose={() => setShowAdd(false)}
-          onSaved={() => { setShowAdd(false); qc.invalidateQueries(['project-change-orders', p.id]); }}
+          onSaved={() => { setShowAdd(false); qc.invalidateQueries({ queryKey: ['project-change-orders', p.id] }); }}
         />
       )}
     </div>
@@ -738,14 +866,40 @@ function QualityTab({ p, rfis, submittals }) {
 }
 
 // ── Team tab ──────────────────────────────────────────────────────────────────
+const SEVERITY_PILL = { minor: 'info', moderate: 'warn', serious: 'danger', fatal: 'danger' };
+const TX_TYPE_COLOR = { out: 'danger', in: 'good', borrow: 'warn', return: 'info', adjustment: 'muted' };
+
 function TeamTab({ p }) {
+  const navigate = useNavigate();
+  const [resourceView, setResourceView] = useState('fleet'); // 'fleet' | 'safety' | 'inventory'
+
   const { data: members = p.members || [] } = useQuery({
     queryKey: ['project-members', p.id],
     queryFn: () => api.get(`/projects/${p.id}/members`).then(r => r.data).catch(() => p.members || []),
   });
+  const { data: fleetData } = useQuery({
+    queryKey: ['project-fleet', p.id],
+    queryFn: () => api.get(`/fleet/vehicles?project_id=${p.id}`).then(r => r.data).catch(() => ({ vehicles: [] })),
+  });
+  const { data: safetyData } = useQuery({
+    queryKey: ['project-safety', p.id],
+    queryFn: () => api.get(`/safety/incidents?project_id=${p.id}`).then(r => r.data).catch(() => ({ incidents: [] })),
+  });
+  const { data: inventoryData } = useQuery({
+    queryKey: ['project-inventory-tx', p.id],
+    queryFn: () => api.get(`/inventory/transactions?project_id=${p.id}`).then(r => r.data).catch(() => ({ transactions: [] })),
+  });
+
+  const vehicles     = fleetData?.vehicles     ?? [];
+  const incidents    = safetyData?.incidents   ?? [];
+  const transactions = inventoryData?.transactions ?? [];
+
+  const openIncidents = incidents.filter(i => i.status !== 'closed').length;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      {/* ── Team table ── */}
       <div className="card">
         <div className="card-head">
           <h3>Project team</h3>
@@ -778,6 +932,140 @@ function TeamTab({ p }) {
         )}
       </div>
 
+      {/* ── Site resources ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="seg-toggle">
+          <button aria-pressed={resourceView === 'fleet'}     onClick={() => setResourceView('fleet')}>
+            Fleet ({vehicles.length})
+          </button>
+          <button aria-pressed={resourceView === 'safety'}    onClick={() => setResourceView('safety')}>
+            Safety ({incidents.length}){openIncidents > 0 && ` · ${openIncidents} open`}
+          </button>
+          <button aria-pressed={resourceView === 'inventory'} onClick={() => setResourceView('inventory')}>
+            Materials ({transactions.length})
+          </button>
+        </div>
+        <div style={{ flex: 1 }} />
+        {resourceView === 'fleet'     && <button className="btn sm ghost" onClick={() => navigate('/dashboard/fleet')}><Icon name="truck" size={12} /> Manage Fleet</button>}
+        {resourceView === 'safety'    && <button className="btn sm ghost" onClick={() => navigate('/dashboard/safety')}><Icon name="shield" size={12} /> Safety Log</button>}
+        {resourceView === 'inventory' && <button className="btn sm ghost" onClick={() => navigate('/dashboard/inventory')}><Icon name="inventory" size={12} /> Inventory</button>}
+      </div>
+
+      {/* Fleet vehicles */}
+      {resourceView === 'fleet' && (
+        <div className="card">
+          <div className="card-head">
+            <h3>Assigned fleet</h3>
+            <span className="page-sub">{vehicles.length} vehicle{vehicles.length !== 1 ? 's' : ''} on this project</span>
+          </div>
+          {vehicles.length === 0 ? (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-mute)', fontSize: 12 }}>
+              No fleet assets assigned to this project.
+              <br />
+              <button className="btn sm ghost" style={{ marginTop: 10 }} onClick={() => navigate('/dashboard/fleet')}>Assign from Fleet module</button>
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="tbl">
+                <thead><tr><th>Vehicle</th><th>Type</th><th>Plate</th><th>Status</th><th>Insurance</th><th>Road Tax</th></tr></thead>
+                <tbody>
+                  {vehicles.map(v => (
+                    <tr key={v.id}>
+                      <td style={{ fontWeight: 500 }}>{v.name || `${v.make} ${v.model}`.trim() || '—'}</td>
+                      <td style={{ fontSize: 11, color: 'var(--text-dim)', textTransform: 'capitalize' }}>{v.vehicle_type?.replace(/_/g,' ')}</td>
+                      <td style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>{v.plate_number || '—'}</td>
+                      <td>
+                        <span className={`pill ${v.status === 'active' ? 'good' : v.status === 'maintenance' ? 'warn' : 'muted'}`}>
+                          {v.status}
+                        </span>
+                      </td>
+                      <td className="tbl-mono" style={{ color: v.insurance_expiry && new Date(v.insurance_expiry) < new Date() ? 'var(--danger)' : 'var(--text-dim)', fontSize: 11 }}>
+                        {v.insurance_expiry?.slice(0,10) || '—'}
+                      </td>
+                      <td className="tbl-mono" style={{ color: v.road_tax_expiry && new Date(v.road_tax_expiry) < new Date() ? 'var(--danger)' : 'var(--text-dim)', fontSize: 11 }}>
+                        {v.road_tax_expiry?.slice(0,10) || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Safety incidents */}
+      {resourceView === 'safety' && (
+        <div className="card">
+          <div className="card-head">
+            <h3>Safety incidents</h3>
+            <span className="page-sub">{incidents.length} recorded · {openIncidents} open</span>
+          </div>
+          {incidents.length === 0 ? (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-mute)', fontSize: 12 }}>
+              No safety incidents recorded for this project.
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="tbl">
+                <thead><tr><th>Incident</th><th>Type</th><th>Severity</th><th>Status</th><th>Reported by</th><th className="tbl-mono">Date</th></tr></thead>
+                <tbody>
+                  {incidents.map(i => (
+                    <tr key={i.id}>
+                      <td style={{ fontWeight: 500, maxWidth: 200 }}>{i.title || i.description?.slice(0,60)}</td>
+                      <td style={{ fontSize: 11, color: 'var(--text-dim)', textTransform: 'capitalize' }}>{i.incident_type?.replace(/_/g,' ')}</td>
+                      <td><span className={`pill ${SEVERITY_PILL[i.severity] || 'muted'}`}>{i.severity}</span></td>
+                      <td><span className={`pill ${i.status === 'closed' ? 'good' : i.status === 'investigating' ? 'warn' : 'danger'}`}>{i.status}</span></td>
+                      <td style={{ fontSize: 12, color: 'var(--text-dim)' }}>{i.reported_by_name || '—'}</td>
+                      <td className="tbl-mono" style={{ color: 'var(--text-dim)', fontSize: 11 }}>{i.incident_date?.slice(0,10)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Inventory transactions */}
+      {resourceView === 'inventory' && (
+        <div className="card">
+          <div className="card-head">
+            <h3>Material movements</h3>
+            <span className="page-sub">{transactions.length} transaction{transactions.length !== 1 ? 's' : ''} for this project</span>
+          </div>
+          {transactions.length === 0 ? (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-mute)', fontSize: 12 }}>
+              No inventory movements recorded for this project.
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="tbl">
+                <thead><tr><th>Item</th><th>Type</th><th className="tbl-mono">Qty</th><th>Reference</th><th>By</th><th className="tbl-mono">Date</th></tr></thead>
+                <tbody>
+                  {transactions.map(t => (
+                    <tr key={t.id}>
+                      <td style={{ fontWeight: 500 }}>{t.item_name}</td>
+                      <td>
+                        <span className={`pill ${TX_TYPE_COLOR[t.transaction_type] || 'muted'}`} style={{ textTransform: 'capitalize' }}>
+                          {t.transaction_type}
+                        </span>
+                      </td>
+                      <td className="tbl-mono" style={{ color: ['out','borrow'].includes(t.transaction_type) ? 'var(--danger)' : 'var(--good)', fontWeight: 600 }}>
+                        {['out','borrow'].includes(t.transaction_type) ? '-' : '+'}{Math.abs(t.quantity)}
+                      </td>
+                      <td style={{ fontSize: 11, color: 'var(--text-dim)' }}>{t.reference || '—'}</td>
+                      <td style={{ fontSize: 12, color: 'var(--text-dim)' }}>{t.created_by_name || '—'}</td>
+                      <td className="tbl-mono" style={{ color: 'var(--text-dim)', fontSize: 11 }}>{t.created_at?.slice(0,10)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Project details */}
       <div className="card">
         <div className="card-head"><h3>Project details</h3></div>
@@ -809,19 +1097,128 @@ function TeamTab({ p }) {
 }
 
 // ── Documents tab ─────────────────────────────────────────────────────────────
-function DocumentsTab({ p }) {
+const DOC_CATEGORY_COLOR = {
+  Drawing: 'accent', Contract: 'good', Specification: 'info',
+  Report: 'warn', Invoice: 'danger', Other: 'muted',
+};
+
+function DocumentsTab({ p, docs }) {
+  const navigate = useNavigate();
+  const [filter, setFilter] = useState('all');
+
+  const categories = [...new Set(docs.map(d => d.category || 'Other'))].sort();
+
+  const visible = filter === 'all'
+    ? docs
+    : filter === 'pending'
+      ? docs.filter(d => d.status === 'pending_approval')
+      : docs.filter(d => (d.category || 'Other') === filter);
+
+  const pending = docs.filter(d => d.status === 'pending_approval').length;
+
   return (
-    <div className="card">
-      <div className="card-head">
-        <h3>Documents</h3>
-        <span className="page-sub">Project-linked documents</span>
-        <div style={{ flex: 1 }} />
-        <button className="btn sm primary"><Icon name="plus" size={12} /> Upload</button>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* KPIs */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 12 }}>
+        {[
+          { label: 'Total files',     value: docs.length,  foot: 'linked to project' },
+          { label: 'Pending approval',value: pending,      foot: 'awaiting review', tone: pending > 0 ? 'warn' : undefined },
+          { label: 'Approved',        value: docs.filter(d => d.status === 'approved').length, foot: 'signed off', tone: 'good' },
+          { label: 'Categories',      value: categories.length, foot: 'file types' },
+        ].map((k, i) => (
+          <div key={i} className="card" style={{ padding: '12px 16px' }}>
+            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-mute)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em' }}>{k.label}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: k.tone ? `var(--${k.tone})` : 'var(--text)', marginTop: 2, fontFamily: 'JetBrains Mono, monospace' }}>{k.value}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-mute)', marginTop: 2 }}>{k.foot}</div>
+          </div>
+        ))}
       </div>
-      <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-mute)' }}>
-        <Icon name="doc" size={32} style={{ marginBottom: 8 }} />
-        <div style={{ fontSize: 13 }}>Documents linked to this project will appear here.</div>
-        <div style={{ fontSize: 11, marginTop: 4 }}>Use the Document Manager to upload and manage files.</div>
+
+      <div className="card">
+        <div className="card-head">
+          <h3>Project Documents</h3>
+          <span className="page-sub">{docs.length} file{docs.length !== 1 ? 's' : ''}</span>
+          <div style={{ flex: 1 }} />
+          {/* Filter chips */}
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            <button className={`btn sm ${filter === 'all' ? 'primary' : 'ghost'}`} onClick={() => setFilter('all')}>All</button>
+            {pending > 0 && (
+              <button className={`btn sm ${filter === 'pending' ? 'primary' : 'ghost'}`} onClick={() => setFilter('pending')}>
+                Pending ({pending})
+              </button>
+            )}
+            {categories.map(cat => (
+              <button key={cat} className={`btn sm ${filter === cat ? 'primary' : 'ghost'}`} onClick={() => setFilter(cat)}>
+                {cat}
+              </button>
+            ))}
+          </div>
+          <button className="btn sm primary" onClick={() => navigate('/dashboard/documents')}>
+            <Icon name="plus" size={12} /> Upload
+          </button>
+        </div>
+
+        {visible.length === 0 ? (
+          <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-mute)' }}>
+            <Icon name="doc" size={32} style={{ marginBottom: 12, opacity: .4 }} />
+            <div style={{ fontSize: 13 }}>
+              {docs.length === 0
+                ? 'No documents linked to this project yet.'
+                : 'No documents match this filter.'}
+            </div>
+            {docs.length === 0 && (
+              <button className="btn sm ghost" style={{ marginTop: 12 }} onClick={() => navigate('/dashboard/documents')}>
+                Go to Document Manager
+              </button>
+            )}
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Title</th><th>Category</th><th>Status</th>
+                  <th>Uploaded by</th><th className="tbl-mono">Ver.</th>
+                  <th className="tbl-mono">Size</th><th className="tbl-mono">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map(d => (
+                  <tr key={d.id}>
+                    <td style={{ fontWeight: 500 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Icon name="doc" size={13} style={{ color: 'var(--text-mute)', flexShrink: 0 }} />
+                        {d.title || d.filename}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`pill ${DOC_CATEGORY_COLOR[d.category] || 'muted'}`} style={{ fontSize: 10 }}>
+                        {d.category || 'Other'}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`pill ${
+                        d.status === 'approved' ? 'good' :
+                        d.status === 'pending_approval' ? 'warn' :
+                        d.status === 'deleted' ? 'danger' : 'muted'
+                      }`}>
+                        {d.status?.replace(/_/g, ' ') || 'active'}
+                      </span>
+                    </td>
+                    <td style={{ fontSize: 12, color: 'var(--text-dim)' }}>{d.uploaded_by_name || '—'}</td>
+                    <td className="tbl-mono" style={{ color: 'var(--text-dim)' }}>v{d.version || 1}</td>
+                    <td className="tbl-mono" style={{ color: 'var(--text-dim)', fontSize: 11 }}>
+                      {d.file_size ? `${(d.file_size / 1024).toFixed(0)} KB` : '—'}
+                    </td>
+                    <td className="tbl-mono" style={{ color: 'var(--text-dim)', fontSize: 11 }}>
+                      {d.created_at?.slice(0, 10)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

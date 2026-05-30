@@ -67,7 +67,7 @@ router.patch('/items/:id', authorize('director','admin','pm','officer'), async (
 
 router.get('/transactions', async (req, res, next) => {
   try {
-    const { item_id } = req.query;
+    const { item_id, project_id } = req.query;
     const { db } = req;
     let q = `
       SELECT it.*, ii.name AS item_name, u.name AS created_by_name,
@@ -78,7 +78,8 @@ router.get('/transactions', async (req, res, next) => {
       WHERE ii.tenant_id = $1
     `;
     const params = [req.tenant_id];
-    if (item_id) { q += ` AND it.item_id = $2`; params.push(item_id); }
+    if (item_id)    { params.push(item_id);    q += ` AND it.item_id = $${params.length}`; }
+    if (project_id) { params.push(project_id); q += ` AND it.project_id = $${params.length}`; }
     q += ` ORDER BY it.created_at DESC LIMIT 200`;
     const { rows } = await db.query(q, params);
     res.json({ transactions: rows });
