@@ -3,6 +3,7 @@
 // from the finance API overrides the design's representative figures where present.
 import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import NewPCModal from './NewPCModal';
 import api from '../../lib/api';
 import Icon from '../../components/Icon';
 import { fmtShort } from './finCharts';
@@ -45,6 +46,7 @@ function mapCert(c) {
 
 export default function FinancePage() {
   const [tab, setTab] = useState('cockpit');
+  const [showNewPC, setShowNewPC] = useState(false);
   const qc = useQueryClient();
 
   const { data: cockpit } = useQuery({ queryKey: ['fin-cockpit'], queryFn: () => api.get('/finance/cockpit').then(r => r.data).catch(() => null) });
@@ -86,7 +88,7 @@ export default function FinancePage() {
           </div>
           <button className="btn ghost"><Icon name="filter" size={14} /> Filter</button>
           <button className="btn"><Icon name="download" size={14} /> Export</button>
-          <button className="btn primary"><Icon name="plus" size={14} /> New PC</button>
+          <button className="btn primary" onClick={() => setShowNewPC(true)}><Icon name="plus" size={14} /> New PC</button>
         </div>
       </div>
 
@@ -104,6 +106,8 @@ export default function FinancePage() {
           );
         })}
       </div>
+
+      {showNewPC && <NewPCModal onClose={() => setShowNewPC(false)} />}
 
       <div className="page-body" style={{ paddingTop: 12 }}>
         {tab === 'cockpit' && <FinanceCockpit live={cockpit || {}} statutory={statutory} />}
