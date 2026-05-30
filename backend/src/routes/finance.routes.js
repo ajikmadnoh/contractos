@@ -494,4 +494,72 @@ router.get('/aging-matrix', authenticate, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── BONDS & INSURANCE ────────────────────────────────────────────────────────
+
+router.get('/bonds', authenticate, async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT id, project_id, code, kind, issuer, amount, cover,
+              to_char(expires_date, 'YYYY-MM-DD') AS expires, state
+       FROM bonds WHERE tenant_id=$1 ORDER BY expires_date ASC NULLS LAST`,
+      [req.user.tenant_id]
+    );
+    res.json(result.rows);
+  } catch (err) { next(err); }
+});
+
+router.post('/bonds', authenticate, authorize(ROLES.DIRECTOR, ROLES.ADMIN, ROLES.FINANCE), async (req, res, next) => {
+  try {
+    const { projectId, code, kind, issuer, amount, cover, expiresDate, state } = req.body;
+    if (!kind) return res.status(400).json({ error: 'Bond kind is required.' });
+    const result = await query(
+      `INSERT INTO bonds (id, tenant_id, project_id, code, kind, issuer, amount, cover, expires_date, state)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,'ok')) RETURNING *`,
+      [uuidv4(), req.user.tenant_id, projectId || null, code || null, kind, issuer || null, n(amount), cover || null, expiresDate || null, state || null]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// ── STATUTORY LEDGER ─────────────────────────────────────────────────────────
+
+router.get('/statutory', authenticate, async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT id, code, label, period, to_char(due_date, 'YYYY-MM-DD') AS due,
+              amount, status, reference AS ref
+       FROM statutory_filings WHERE tenant_id=$1 ORDER BY due_date ASC NULLS LAST, code`,
+      [req.user.tenant_id]
+    );
+    res.json(result.rows);
+  } catch (err) { next(err); }
+});
+
+router.post('/statutory', authenticate, authorize(ROLES.DIRECTOR, ROLES.ADMIN, ROLES.FINANCE), async (req, res, next) => {
+  try {
+    const { code, label, period, dueDate, amount, status, reference } = req.body;
+    if (!code || !label) return res.status(400).json({ error: 'Code and label are required.' });
+    const result = await query(
+      `INSERT INTO statutory_filings (id, tenant_id, code, label, period, due_date, amount, status, reference)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8,'due'),$9) RETURNING *`,
+      [uuidv4(), req.user.tenant_id, code, label, period || null, dueDate || null, n(amount), status || null, reference || null]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// Mark a statutory filing filed/paid (or back to due).
+router.patch('/statutory/:id/status', authenticate, authorize(ROLES.DIRECTOR, ROLES.ADMIN, ROLES.FINANCE), async (req, res, next) => {
+  try {
+    const { status } = req.body;
+    if (!['due', 'paid'].includes(status)) return res.status(400).json({ error: "status must be 'due' or 'paid'." });
+    const result = await query(
+      'UPDATE statutory_filings SET status=$1, updated_at=NOW() WHERE id=$2 AND tenant_id=$3 RETURNING *',
+      [status, req.params.id, req.user.tenant_id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Filing not found.' });
+    res.json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
 module.exports = router;

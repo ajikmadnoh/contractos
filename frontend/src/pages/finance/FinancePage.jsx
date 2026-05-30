@@ -49,6 +49,8 @@ export default function FinancePage() {
   const { data: cockpit } = useQuery({ queryKey: ['fin-cockpit'], queryFn: () => api.get('/finance/cockpit').then(r => r.data).catch(() => null) });
   const { data: aging } = useQuery({ queryKey: ['fin-aging'], queryFn: () => api.get('/finance/aging-matrix').then(r => r.data).catch(() => null) });
   const { data: liveCerts = [] } = useQuery({ queryKey: ['payment-certs'], queryFn: () => api.get('/finance/payment-certs').then(r => r.data).catch(() => []) });
+  const { data: bonds = [] } = useQuery({ queryKey: ['fin-bonds'], queryFn: () => api.get('/finance/bonds').then(r => r.data).catch(() => []) });
+  const { data: statutory = [] } = useQuery({ queryKey: ['fin-statutory'], queryFn: () => api.get('/finance/statutory').then(r => r.data).catch(() => []) });
 
   const certs = (liveCerts || []).map(mapCert);
 
@@ -90,10 +92,10 @@ export default function FinancePage() {
       </div>
 
       <div className="page-body" style={{ paddingTop: 12 }}>
-        {tab === 'cockpit' && <FinanceCockpit live={cockpit || {}} statutory={cockpit?.statutory} />}
+        {tab === 'cockpit' && <FinanceCockpit live={cockpit || {}} statutory={statutory} />}
         {tab === 'ar'      && <FinanceReceivables matrix={aging} />}
         {tab === 'certs'   && <FinancePaymentCerts certs={certs} />}
-        {tab === 'retent'  && <FinanceRetention />}
+        {tab === 'retent'  && <FinanceRetention bonds={bonds} />}
         {tab === 'einv'    && <FinanceMyInvois />}
       </div>
     </div>

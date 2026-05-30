@@ -5,11 +5,12 @@ import Icon from '../../components/Icon';
 import { Legend, fmtShort, fmtDateLong } from './finCharts';
 import { RETENTIONS, BONDS } from './finData';
 
-export default function FinanceRetention({ ledger }) {
+export default function FinanceRetention({ ledger, bonds }) {
   const rows = ledger && ledger.length ? ledger : RETENTIONS;
+  const bondList = bonds && bonds.length ? bonds : BONDS;
   const totalHeld = rows.reduce((s, r) => s + r.held, 0);
   const totalCap = rows.reduce((s, r) => s + r.cap, 0) || 1;
-  const totalBonds = BONDS.reduce((s, b) => s + b.amount, 0);
+  const totalBonds = bondList.reduce((s, b) => s + Number(b.amount || 0), 0);
 
   return (
     <>
@@ -98,10 +99,10 @@ export default function FinanceRetention({ ledger }) {
         <div className="card rise rise-4" style={{ gridColumn: 'span 5' }}>
           <div className="card-head"><h3>Bonds &amp; insurance</h3><span className="sub">Performance · CAR · DLP</span></div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {BONDS.map((b, i) => {
+            {bondList.map((b, i) => {
               const daysToExpiry = Math.round((new Date(b.expires) - new Date('2026-05-20')) / 86400000);
               return (
-                <div key={i} style={{ padding: '12px 16px', borderBottom: i < BONDS.length - 1 ? '1px solid var(--border)' : 0, display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div key={b.id || i} style={{ padding: '12px 16px', borderBottom: i < bondList.length - 1 ? '1px solid var(--border)' : 0, display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{
                     width: 34, height: 34, borderRadius: 8,
                     background: b.kind.includes('CAR') ? 'var(--info-soft)' : b.kind.includes('DLP') ? 'var(--magenta-soft)' : 'var(--accent-soft)',

@@ -68,6 +68,43 @@ async function seed() {
       console.log(`  ✓  ${u.role.padEnd(12)} → ${u.email}`);
     }
 
+    // ── Finance: bonds & insurance ───────────────────────────────────────────
+    const BONDS = [
+      ['PVDH-T3', 'Performance Bond', 'AmBank Islamic',  9225000,   '5% contract',   '2026-12-15', 'ok'],
+      ['PVDH-T3', 'CAR Insurance',    'Allianz General', 184500000, '100% contract', '2026-09-15', 'ok'],
+      ['ISKP-2',  'Performance Bond', 'Maybank',         4810000,   '5% contract',   '2026-09-30', 'expiring'],
+      ['KLCC-EB', 'Performance Bond', 'CIMB Bank',       2395000,   '5% contract',   '2026-11-04', 'ok'],
+      ['PNS-HUB', 'Performance Bond', 'HSBC Amanah',     10920000,  '5% contract',   '2028-03-20', 'ok'],
+      ['KKM-RES', 'DLP Bond',         'Maybank',         1410000,   '2.5% contract', '2027-05-30', 'ok'],
+    ];
+    for (const [code, kind, issuer, amount, cover, expires, state] of BONDS) {
+      await client.query(
+        `INSERT INTO bonds (tenant_id, code, kind, issuer, amount, cover, expires_date, state)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [tenant.id, code, kind, issuer, amount, cover, expires, state]
+      );
+    }
+    console.log(`  ✓  ${BONDS.length} bonds/insurance records`);
+
+    // ── Finance: statutory ledger ────────────────────────────────────────────
+    const STATUTORY = [
+      ['SST',       'SST 8% (Service Tax)',          'Apr 2026', '2026-05-30', 1420000, 'due',  'C20881234560'],
+      ['CIDB Levy', 'CIDB Levy 0.125%',              'Q1 2026',  '2026-05-31', 184000,  'due',  'G7-PB-1500-95'],
+      ['EPF',       'EPF (KWSP) — 13% employer',     'Apr 2026', '2026-05-15', 412000,  'paid', 'KWSP 4128-991'],
+      ['SOCSO',     'SOCSO (PERKESO)',               'Apr 2026', '2026-05-15', 38400,   'paid', 'PERKESO 22841'],
+      ['EIS',       'EIS (Employment Insurance)',    'Apr 2026', '2026-05-15', 9600,    'paid', 'EIS 22841'],
+      ['PCB',       'PCB (MTD) Income Tax',          'Apr 2026', '2026-05-15', 184200,  'paid', 'LHDN 7184-021'],
+      ['HRDF',      'HRD Corp Levy 1%',              'Apr 2026', '2026-05-15', 32400,   'paid', 'HRDF 1241'],
+    ];
+    for (const [code, label, period, due, amount, status, reference] of STATUTORY) {
+      await client.query(
+        `INSERT INTO statutory_filings (tenant_id, code, label, period, due_date, amount, status, reference)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [tenant.id, code, label, period, due, amount, status, reference]
+      );
+    }
+    console.log(`  ✓  ${STATUTORY.length} statutory filings`);
+
     await client.query('COMMIT');
 
     console.log('\n' + '─'.repeat(52));
