@@ -5,6 +5,7 @@ const { ROLES } = require('../config/constants');
 const { query } = require('../config/database');
 const { v4: uuidv4 } = require('uuid');
 const automation = require('../services/automationService');
+const { buildClaimPdf, buildCertPdf } = require('../services/pdfService');
 
 const n = (v) => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
 const fmtRM = (v) => `RM ${n(v).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -21,7 +22,6 @@ async function buildScopeClaim(projectId, tenantId) {
     [projectId, tenantId]
   );
 
-  // Previously claimed value per scope line (claims not rejected).
   const prev = await query(
     `SELECT ci.project_scope_id, COALESCE(SUM(ci.this_value),0) AS billed
      FROM claim_items ci JOIN claims c ON ci.claim_id=c.id
@@ -39,12 +39,12 @@ async function buildScopeClaim(projectId, tenantId) {
     const contractAmount = n(s.amount) || (n(s.contract_qty) * rate);
     const qtyDone = n(s.qty_done);
     const cumValue = rate > 0 ? qtyDone * rate
-                   : contractAmount * (n(s.pct_complete) / 100);   // fallback: pct of value
+                   : contractAmount * (n(s.pct_complete) / 100);
     const billed = billedMap[s.id] || 0;
     const thisValue = Math.max(0, cumValue - billed);
     cumulativeValue += cumValue;
     previousValue += billed;
-    if (cumValue <= 0 && billed <= 0) continue; // skip untouched lines
+    if (cumValue <= 0 && billed <= 0) continue;
     lines.push({
       scopeId: s.id, itemCode: s.item_code, section: s.section, description: s.description,
       unit: s.unit, contractQty: n(s.contract_qty), unitRate: rate, contractAmount,
@@ -71,43 +71,44 @@ async function buildScopeClaim(projectId, tenantId) {
 
 router.get('/claims', authenticate, async (req, res, next) => {
   try {
-    const result = await query(
-      `SELECT c.*, p.name as project_name, u.name as submitted_by_name
-       FROM claims c
-       LEFT JOIN projects p ON c.project_id = p.id
-       LEFT JOIN users u ON c.submitted_by = u.id
-       WHERE c.tenant_id = $1 ORDER BY c.created_at DESC`,
-      [req.user.tenant_id]
-    );
+    const { projectId, status } = req.query;
+    let sql = `SELECT c.*, p.name as project_name, u.name as submitted_by_name
+               FROM claims c
+               LEFT JOIN projects p ON c.project_id = p.id
+               LEFT JOIN users u ON c.submitted_by = u.id
+               WHERE c.tenant_id = $1`;
+    const params = [req.user.tenant_id];
+    if (projectId) { params.push(projectId); sql += ` AND c.project_id = $${params.length}`; }
+    if (status)    { params.push(status);    sql += ` AND c.status = $${params.length}`; }
+    sql += ' ORDER BY c.created_at DESC';
+    const result = await query(sql, params);
     res.json(result.rows);
   } catch (err) { next(err); }
 });
 
 router.post('/claims', authenticate, authorize(ROLES.DIRECTOR, ROLES.ADMIN, ROLES.QS, ROLES.FINANCE), async (req, res, next) => {
   try {
-    const { projectId, claimType, claimDate, amount, description } = req.body;
+    const { projectId, claimType, claimDate, amount, description, taxRate = 0, notes } = req.body;
 
-    // Get project retention %
     const proj = await query('SELECT retention_percentage FROM projects WHERE id=$1 AND tenant_id=$2', [projectId, req.user.tenant_id]);
     if (proj.rows.length === 0) return res.status(404).json({ error: 'Project not found.' });
 
     const retentionPct = Number(proj.rows[0].retention_percentage) / 100;
     const retentionAmount = Number(amount) * retentionPct;
-    const netAmount = Number(amount) - retentionAmount;
+    const taxAmount = Number(amount) * (Number(taxRate) / 100);
+    const netAmount = Number(amount) - retentionAmount + taxAmount;
     const claimNumber = `CLM-${Date.now().toString().slice(-6)}`;
 
     const result = await query(
-      `INSERT INTO claims (id, tenant_id, project_id, claim_number, claim_type, claim_date, amount, retention_amount, net_amount, description, submitted_by, source)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'manual') RETURNING *`,
-      [uuidv4(), req.user.tenant_id, projectId, claimNumber, claimType, claimDate, amount, retentionAmount, netAmount, description, req.user.id]
+      `INSERT INTO claims (id, tenant_id, project_id, claim_number, claim_type, claim_date, amount, retention_amount, net_amount, tax_rate, tax_amount, description, notes, submitted_by, source)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'manual') RETURNING *`,
+      [uuidv4(), req.user.tenant_id, projectId, claimNumber, claimType, claimDate, amount, retentionAmount, netAmount, taxRate, taxAmount, description, notes || null, req.user.id]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) { next(err); }
 });
 
 // GET /finance/claims/preview/:projectId
-// Preview a progress claim built from project_scope work-done-to-date,
-// net of what prior (non-rejected) claims already billed per scope line.
 router.get('/claims/preview/:projectId', authenticate, async (req, res, next) => {
   try {
     const data = await buildScopeClaim(req.params.projectId, req.user.tenant_id);
@@ -116,25 +117,29 @@ router.get('/claims/preview/:projectId', authenticate, async (req, res, next) =>
   } catch (err) { next(err); }
 });
 
-// POST /finance/claims/generate  { projectId, claimDate }
-// Materialise the scope-based progress claim + per-line claim_items.
+// POST /finance/claims/generate  { projectId, claimDate, taxRate }
 router.post('/claims/generate', authenticate, authorize(ROLES.DIRECTOR, ROLES.ADMIN, ROLES.QS, ROLES.FINANCE), async (req, res, next) => {
   try {
-    const { projectId, claimDate, description } = req.body;
+    const { projectId, claimDate, description, taxRate = 0 } = req.body;
     const data = await buildScopeClaim(projectId, req.user.tenant_id);
     if (!data) return res.status(404).json({ error: 'Project not found.' });
     if (data.lines.length === 0) return res.status(400).json({ error: 'No scope items to claim. Import a BQ and record progress first.' });
     if (Number(data.thisClaim) <= 0) return res.status(400).json({ error: 'Nothing new to claim — all work done to date has already been claimed.' });
+
+    const taxAmount = data.thisClaim * (Number(taxRate) / 100);
+    const netAmount = data.netAmount + taxAmount;
 
     const claimNumber = `CLM-${Date.now().toString().slice(-6)}`;
     const id = uuidv4();
     await query('BEGIN');
     try {
       await query(
-        `INSERT INTO claims (id, tenant_id, project_id, claim_number, claim_type, claim_date, amount, retention_amount, net_amount, description, submitted_by, source, work_done_value, previous_value)
-         VALUES ($1,$2,$3,$4,'progress',$5,$6,$7,$8,$9,$10,'scope',$11,$12)`,
-        [id, req.user.tenant_id, projectId, claimNumber, claimDate || new Date().toISOString().split('T')[0],
-         data.thisClaim, data.retentionAmount, data.netAmount,
+        `INSERT INTO claims (id, tenant_id, project_id, claim_number, claim_type, claim_date, amount, retention_amount, net_amount, tax_rate, tax_amount, description, submitted_by, source, work_done_value, previous_value)
+         VALUES ($1,$2,$3,$4,'progress',$5,$6,$7,$8,$9,$10,$11,$12,'scope',$13,$14)`,
+        [id, req.user.tenant_id, projectId, claimNumber,
+         claimDate || new Date().toISOString().split('T')[0],
+         data.thisClaim, data.retentionAmount, netAmount,
+         Number(taxRate), taxAmount,
          description || `Progress claim — work done to ${claimDate || 'date'}`,
          req.user.id, data.cumulativeValue, data.previousValue]
       );
@@ -177,7 +182,6 @@ router.patch('/claims/:id/status', authenticate, authorize(ROLES.DIRECTOR, ROLES
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Claim not found.' });
 
-    // Auto-create payment cert when claim is certified
     const claim = result.rows[0];
     if (status === 'certified') {
       const dueDate = new Date();
@@ -187,21 +191,37 @@ router.patch('/claims/:id/status', authenticate, authorize(ROLES.DIRECTOR, ROLES
          VALUES ($1,$2,$3,$4,$5,NOW(),$6,$7)`,
         [uuidv4(), req.user.tenant_id, claim.project_id, claim.id, `CERT-${Date.now().toString().slice(-6)}`, claim.net_amount, dueDate.toISOString().split('T')[0]]
       );
-      await automation.notifyProjectStakeholders(claim.project_id, [ROLES.DIRECTOR, ROLES.FINANCE], {
-        tenantId: req.user.tenant_id,
-        title: 'Claim certified',
-        message: `Claim ${claim.claim_number} certified — payment cert raised for ${fmtRM(claim.net_amount)} (due in 30 days).`,
-        type: 'success', link: '/finance',
-      });
     }
-    if (status === 'paid') {
-      await automation.notifyRoles([ROLES.DIRECTOR, ROLES.FINANCE], {
-        tenantId: req.user.tenant_id, title: 'Claim paid',
-        message: `Claim ${claim.claim_number} marked paid (${fmtRM(claim.amount)}).`,
-        type: 'success', link: '/finance',
-      });
-    }
+    await automation.notifyClaimStatus(claim, req.user.tenant_id);
     res.json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// PATCH /finance/claims/:id/notes
+router.patch('/claims/:id/notes', authenticate, authorize(ROLES.DIRECTOR, ROLES.ADMIN, ROLES.FINANCE, ROLES.QS), async (req, res, next) => {
+  try {
+    const { notes } = req.body;
+    const result = await query(
+      'UPDATE claims SET notes=$1, updated_at=NOW() WHERE id=$2 AND tenant_id=$3 RETURNING *',
+      [notes || null, req.params.id, req.user.tenant_id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Claim not found.' });
+    res.json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// GET /finance/claims/:id/pdf
+router.get('/claims/:id/pdf', authenticate, async (req, res, next) => {
+  try {
+    const [claimRes, itemsRes, tenantRes] = await Promise.all([
+      query(`SELECT c.*, p.name as project_name, u.name as submitted_by_name
+             FROM claims c LEFT JOIN projects p ON c.project_id=p.id LEFT JOIN users u ON c.submitted_by=u.id
+             WHERE c.id=$1 AND c.tenant_id=$2`, [req.params.id, req.user.tenant_id]),
+      query('SELECT * FROM claim_items WHERE claim_id=$1 ORDER BY sort_order', [req.params.id]),
+      query('SELECT company_name, address, phone, ssm_number FROM tenants WHERE id=$1', [req.user.tenant_id]),
+    ]);
+    if (claimRes.rows.length === 0) return res.status(404).json({ error: 'Claim not found.' });
+    buildClaimPdf(res, { claim: claimRes.rows[0], items: itemsRes.rows, tenant: tenantRes.rows[0] || {} });
   } catch (err) { next(err); }
 });
 
@@ -209,32 +229,79 @@ router.patch('/claims/:id/status', authenticate, authorize(ROLES.DIRECTOR, ROLES
 
 router.get('/payment-certs', authenticate, async (req, res, next) => {
   try {
-    const result = await query(
-      `SELECT pc.*, p.name as project_name
-       FROM payment_certificates pc
-       LEFT JOIN projects p ON pc.project_id = p.id
-       WHERE pc.tenant_id = $1 ORDER BY pc.created_at DESC`,
-      [req.user.tenant_id]
-    );
+    const { projectId, status } = req.query;
+    let sql = `SELECT pc.*, p.name as project_name
+               FROM payment_certificates pc
+               LEFT JOIN projects p ON pc.project_id = p.id
+               WHERE pc.tenant_id = $1`;
+    const params = [req.user.tenant_id];
+    if (projectId) { params.push(projectId); sql += ` AND pc.project_id = $${params.length}`; }
+    if (status)    { params.push(status);    sql += ` AND pc.status = $${params.length}`; }
+    sql += ' ORDER BY pc.created_at DESC';
+    const result = await query(sql, params);
     res.json(result.rows);
   } catch (err) { next(err); }
 });
 
 router.patch('/payment-certs/:id', authenticate, authorize(ROLES.DIRECTOR, ROLES.ADMIN, ROLES.FINANCE), async (req, res, next) => {
   try {
-    const { status, paidDate } = req.body;
+    const { status, paidDate, certifiedAmount, notes } = req.body;
+    const fields = [], params = [];
+    if (status !== undefined)          { params.push(status);          fields.push(`status=$${params.length}`); }
+    if (paidDate !== undefined)        { params.push(paidDate || null); fields.push(`paid_date=$${params.length}`); }
+    if (certifiedAmount !== undefined) { params.push(certifiedAmount); fields.push(`certified_amount=$${params.length}`); }
+    if (notes !== undefined)           { params.push(notes || null);   fields.push(`notes=$${params.length}`); }
+    if (fields.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
+    fields.push('updated_at=NOW()');
+    params.push(req.params.id, req.user.tenant_id);
     const result = await query(
-      'UPDATE payment_certificates SET status=$1, paid_date=$2 WHERE id=$3 AND tenant_id=$4 RETURNING *',
-      [status, paidDate || null, req.params.id, req.user.tenant_id]
+      `UPDATE payment_certificates SET ${fields.join(', ')} WHERE id=$${params.length - 1} AND tenant_id=$${params.length} RETURNING *`,
+      params
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Certificate not found.' });
     res.json(result.rows[0]);
   } catch (err) { next(err); }
 });
 
+// POST /finance/payment-certs/:id/partial
+router.post('/payment-certs/:id/partial', authenticate, authorize(ROLES.DIRECTOR, ROLES.ADMIN, ROLES.FINANCE), async (req, res, next) => {
+  try {
+    const { amountPaid } = req.body;
+    if (!amountPaid || Number(amountPaid) <= 0) return res.status(400).json({ error: 'amountPaid must be positive.' });
+
+    const certRes = await query(
+      'SELECT * FROM payment_certificates WHERE id=$1 AND tenant_id=$2',
+      [req.params.id, req.user.tenant_id]
+    );
+    if (certRes.rows.length === 0) return res.status(404).json({ error: 'Certificate not found.' });
+    const cert = certRes.rows[0];
+    if (cert.status === 'paid') return res.status(409).json({ error: 'Certificate is already fully paid.' });
+
+    const newAmountPaid = n(cert.amount_paid) + n(amountPaid);
+    const isFullyPaid = newAmountPaid >= n(cert.certified_amount);
+    const newStatus = isFullyPaid ? 'paid' : 'partially_paid';
+    const paidDate = isFullyPaid ? new Date().toISOString().split('T')[0] : null;
+
+    const result = await query(
+      `UPDATE payment_certificates
+         SET amount_paid=$1, status=$2, paid_date=COALESCE($3, paid_date), updated_at=NOW()
+       WHERE id=$4 AND tenant_id=$5 RETURNING *`,
+      [newAmountPaid, newStatus, paidDate, req.params.id, req.user.tenant_id]
+    );
+
+    if (isFullyPaid) {
+      await automation.notifyProjectStakeholders(cert.project_id, [ROLES.DIRECTOR, ROLES.FINANCE], {
+        tenantId: req.user.tenant_id,
+        title: 'Payment cert fully paid',
+        message: `Cert ${cert.cert_number} is now fully paid (${fmtRM(cert.certified_amount)}).`,
+        type: 'success', link: '/finance',
+      });
+    }
+    res.json(result.rows[0]);
+  } catch (err) { next(err); }
+});
+
 // POST /finance/payment-certs/:id/invoice
-// One-click bill: create an invoice pre-filled from a certified payment cert,
-// linked back to the cert + claim. Idempotent-ish: blocks double billing.
 router.post('/payment-certs/:id/invoice', authenticate, authorize(ROLES.DIRECTOR, ROLES.ADMIN, ROLES.FINANCE), async (req, res, next) => {
   try {
     const cert = (await query(
@@ -274,9 +341,45 @@ router.post('/payment-certs/:id/invoice', authenticate, authorize(ROLES.DIRECTOR
   } catch (err) { next(err); }
 });
 
-// POST /finance/run-aging — sweep overdue certs/invoices for this tenant.
-// Also runs automatically on a daily timer (see server.js); exposed for manual
-// refresh from the Finance cockpit.
+// GET /finance/payment-certs/:id/pdf
+router.get('/payment-certs/:id/pdf', authenticate, async (req, res, next) => {
+  try {
+    const [certRes, tenantRes] = await Promise.all([
+      query(`SELECT pc.*, p.name as project_name FROM payment_certificates pc
+             LEFT JOIN projects p ON pc.project_id=p.id
+             WHERE pc.id=$1 AND pc.tenant_id=$2`, [req.params.id, req.user.tenant_id]),
+      query('SELECT company_name, address, phone, ssm_number FROM tenants WHERE id=$1', [req.user.tenant_id]),
+    ]);
+    if (certRes.rows.length === 0) return res.status(404).json({ error: 'Certificate not found.' });
+    const cert = certRes.rows[0];
+    let claim = null;
+    if (cert.claim_id) {
+      const cr = await query('SELECT claim_number FROM claims WHERE id=$1', [cert.claim_id]);
+      claim = cr.rows[0] || null;
+    }
+    buildCertPdf(res, { cert, claim, tenant: tenantRes.rows[0] || {} });
+  } catch (err) { next(err); }
+});
+
+// GET /finance/retention — per-project retention held
+router.get('/retention', authenticate, async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT p.id AS project_id, p.name AS project_name, p.retention_percentage,
+              COALESCE(SUM(c.retention_amount) FILTER (WHERE c.status NOT IN ('rejected','draft')), 0) AS retention_held,
+              COUNT(c.id) FILTER (WHERE c.status NOT IN ('rejected','draft')) AS claim_count
+       FROM projects p
+       LEFT JOIN claims c ON c.project_id = p.id AND c.tenant_id = p.tenant_id
+       WHERE p.tenant_id = $1 AND p.status NOT IN ('cancelled')
+       GROUP BY p.id, p.name, p.retention_percentage
+       ORDER BY retention_held DESC`,
+      [req.user.tenant_id]
+    );
+    res.json(result.rows);
+  } catch (err) { next(err); }
+});
+
+// POST /finance/run-aging
 router.post('/run-aging', authenticate, authorize(ROLES.DIRECTOR, ROLES.ADMIN, ROLES.FINANCE), async (req, res, next) => {
   try {
     const result = await automation.runAging(req.user.tenant_id);

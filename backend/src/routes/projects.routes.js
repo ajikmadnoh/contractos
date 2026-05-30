@@ -4,6 +4,7 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { ROLES } = require('../config/constants');
 const { query } = require('../config/database');
 const { v4: uuidv4 } = require('uuid');
+const automation = require('../services/automationService');
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 const canManage = authorize(ROLES.DIRECTOR, ROLES.ADMIN, ROLES.PM);
@@ -337,7 +338,7 @@ router.post('/:id/change-orders', canView, async (req, res, next) => {
     const { title, description, reason, scopeChange, costChange, timeChange, origin } = req.body;
     const coNumber = `CO-${Date.now().toString().slice(-5)}`;
     const costVal = parseFloat(costChange || 0);
-    // Auto-approve small changes (< RM 50,000)
+    // Auto-approve small changes (< RM 50,000); large ones go to Director/Admin
     const autoApprove = Math.abs(costVal) < 50000;
     const r = await query(
       `INSERT INTO project_change_orders
@@ -352,6 +353,10 @@ router.post('/:id/change-orders', canView, async (req, res, next) => {
        autoApprove ? req.user.id : null,
        autoApprove ? new Date().toISOString() : null]
     );
+    if (!autoApprove) {
+      automation.notifyChangeOrderPending(req.params.id, r.rows[0], req.user.tenant_id)
+        .catch(e => console.error('[automation] CO notify failed:', e.message));
+    }
     res.status(201).json(r.rows[0]);
   } catch (err) { next(err); }
 });

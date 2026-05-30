@@ -17,6 +17,7 @@ const fleetRoutes         = require('./fleet.routes');
 const ratesRoutes         = require('./rates.routes');
 const inventoryRoutes     = require('./inventory.routes');
 const documentsRoutes     = require('./documents.routes');
+const automationRoutes    = require('./automation.routes');
 
 router.use('/auth',          authRoutes);
 router.use('/projects',      projectRoutes);
@@ -34,6 +35,7 @@ router.use('/fleet',         fleetRoutes);
 router.use('/rates',         ratesRoutes);
 router.use('/inventory',     inventoryRoutes);
 router.use('/documents',     documentsRoutes);
+router.use('/automation',    automationRoutes);
 
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', platform: 'ContractOS', version: '1.0.0', timestamp: new Date().toISOString() });

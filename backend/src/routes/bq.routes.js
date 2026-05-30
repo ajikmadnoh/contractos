@@ -12,6 +12,7 @@ const bqExport = require('../services/bqExport');
 const svc = require('../services/bqService');
 const track = require('../services/siteTrackingService');
 const automation = require('../services/automationService');
+const intel = require('../services/bqIntelligence');
 
 const EDIT_ROLES = [ROLES.DIRECTOR, ROLES.ADMIN, ROLES.QS, ROLES.PM];
 const APPROVE_ROLES = [ROLES.DIRECTOR, ROLES.ADMIN];
@@ -130,6 +131,31 @@ router.post('/', authenticate, authorize(...EDIT_ROLES), async (req, res, next) 
   } catch (err) { next(err); }
 });
 
+// ── AI: live rate suggestion for one line (debounced from the add-item row) ──
+// GET /bq/suggest-rate?description=...&unit=...  → { suggestions, section }
+// Registered before GET /:id so "suggest-rate" isn't swallowed as an :id.
+router.get('/suggest-rate', authenticate, async (req, res, next) => {
+  try {
+    const { description, unit } = req.query;
+    if (!description || description.trim().length < 3) return res.json({ suggestions: [], section: null });
+    const suggestions = await intel.suggestRate(req.user.tenant_id, description, unit, { limit: 3 });
+    res.json({ suggestions, section: intel.autoSection(description) });
+  } catch (err) { next(err); }
+});
+
+// ── AI: batch suggestions for auto-pricing & insights ────────────────────────
+// POST /bq/suggest-rates-batch  { items: [{ description, unit }] }
+//   → { suggestions: [ topSuggestion|null, ... ] }  (aligned by index)
+// One DB round-trip prices the whole BQ. Drives the editor's "Auto-price" button
+// and anomaly detection, both computed against the caller's *unsaved* edits.
+router.post('/suggest-rates-batch', authenticate, async (req, res, next) => {
+  try {
+    const items = Array.isArray(req.body.items) ? req.body.items : [];
+    const suggestions = await intel.suggestBatch(req.user.tenant_id, items, {});
+    res.json({ suggestions });
+  } catch (err) { next(err); }
+});
+
 // ── Detail (items; ?include=audit attaches the trail) ────────────────────────
 router.get('/:id', authenticate, async (req, res, next) => {
   try {
@@ -152,7 +178,7 @@ router.get('/:id', authenticate, async (req, res, next) => {
 router.patch('/:id', authenticate, authorize(...EDIT_ROLES), async (req, res, next) => {
   let client;
   try {
-    const { items, status } = req.body;
+    const { items, status, notes } = req.body;
     const existing = await svc.getBq(req.params.id, req.user.tenant_id);
     if (!existing) return res.status(404).json({ error: 'BQ not found.' });
     if (!svc.EDITABLE_STATUSES.includes(existing.status)) {
@@ -166,16 +192,20 @@ router.patch('/:id', authenticate, authorize(...EDIT_ROLES), async (req, res, ne
       const item = items[i];
       const q = svc.num(item.quantity), r = svc.num(item.unitRate ?? item.unit_rate);
       const amt = svc.num(item.amount) ?? ((q || 0) * (r || 0));
+      const rateSrc = item.rateSource || item.rate_source || (r ? 'manual' : null);
+      const rateConf = svc.num(item.rateConfidence ?? item.rate_confidence);
       await client.query(
-        `INSERT INTO bq_items (id, bq_id, item_code, description, unit, quantity, unit_rate, amount, section, sort_order)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-        [uuidv4(), req.params.id, item.itemCode || item.item_code || null, item.description, item.unit || null, q, r, amt, item.section || null, i]
+        `INSERT INTO bq_items (id, bq_id, item_code, description, unit, quantity, unit_rate, amount, section, sort_order, rate_source, rate_confidence)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [uuidv4(), req.params.id, item.itemCode || item.item_code || null, item.description, item.unit || null, q, r, amt, item.section || null, i, rateSrc, rateConf]
       );
     }
     const total = await svc.recomputeTotal(req.params.id, client);
     const bq = await client.query(
-      'UPDATE bq_documents SET status=COALESCE($1,status), version=version+1 WHERE id=$2 RETURNING *',
-      [status || null, req.params.id]
+      `UPDATE bq_documents SET status=COALESCE($1,status), version=version+1,
+         notes=CASE WHEN $2::text IS NOT NULL THEN $2 ELSE notes END
+       WHERE id=$3 RETURNING *`,
+      [status || null, notes !== undefined ? notes : null, req.params.id]
     );
     await svc.audit({ bqId: req.params.id, tenantId: req.user.tenant_id, userId: req.user.id, action: 'items_replaced', detail: { count: (items || []).length, total } }, client);
     await client.query('COMMIT');
@@ -252,31 +282,15 @@ router.post('/:id/transition', authenticate, authorize(...EDIT_ROLES), async (re
     const updated = await query(`UPDATE bq_documents SET ${sets.join(', ')} WHERE id=$${params.length} RETURNING *`, params);
     await svc.audit({ bqId: req.params.id, tenantId: req.user.tenant_id, userId: req.user.id, action: 'status_changed', fromStatus: bq.status, toStatus: to, detail: note ? { note } : null });
 
-    // Automation on approval: auto-import items into the linked project's scope
-    // (so PMO/site tracking is ready immediately) and notify stakeholders.
+    // Automation: notify on every status transition; import scope on approval.
     let autoImported = 0;
-    if (to === 'approved') {
-      try {
-        if (updated.rows[0].project_id) {
-          autoImported = await automation.importBqScope(req.params.id, updated.rows[0].project_id, req.user.tenant_id);
-          await track.recomputeProjectProgress(updated.rows[0].project_id);
-          await automation.notifyProjectStakeholders(updated.rows[0].project_id, [ROLES.QS, ROLES.FINANCE], {
-            tenantId: req.user.tenant_id,
-            title: 'BQ approved',
-            message: `"${updated.rows[0].title}" was approved${autoImported ? ` and ${autoImported} item(s) imported into project scope` : ''}.`,
-            type: 'success',
-            link: `/projects/${updated.rows[0].project_id}`,
-          });
-        } else {
-          await automation.notifyRoles([ROLES.QS, ROLES.FINANCE], {
-            tenantId: req.user.tenant_id,
-            title: 'BQ approved',
-            message: `"${updated.rows[0].title}" was approved. Link it to a project to start tracking.`,
-            type: 'success', link: '/bq',
-          });
-        }
-      } catch (e) { console.error('[automation] BQ-approve hook failed:', e.message); }
-    }
+    try {
+      await automation.notifyBqStatus({ ...updated.rows[0], id: req.params.id }, req.user.tenant_id);
+      if (to === 'approved' && updated.rows[0].project_id) {
+        autoImported = await automation.importBqScope(req.params.id, updated.rows[0].project_id, req.user.tenant_id);
+        if (autoImported) await track.recomputeProjectProgress(updated.rows[0].project_id);
+      }
+    } catch (e) { console.error('[automation] BQ hook failed:', e.message); }
     res.json({ ...updated.rows[0], autoImported });
   } catch (err) { next(err); }
 });

@@ -71,7 +71,8 @@
       "Bash(curl -s -o /dev/null -w \"frontend 3001: %{http_code}\\\\n\" http://localhost:3001/)",
       "Bash(curl -s http://localhost:3001/)",
       "Bash(curl -s -o /dev/null -w \"ProjectDetailPage transform: %{http_code}\\\\n\" \"http://localhost:3001/src/pages/projects/ProjectDetailPage.jsx\")",
-      "Bash(curl -s \"http://localhost:3001/src/pages/projects/ProjectDetailPage.jsx\")"
+      "Bash(curl -s \"http://localhost:3001/src/pages/projects/ProjectDetailPage.jsx\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts',{}\\), indent=2\\)\\)\")"
     ]
   }
 }
