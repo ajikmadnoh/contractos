@@ -76,7 +76,7 @@ export default function FinancePage() {
           <CockpitTab claims={claims} certs={certs} totalClaims={totalClaims} paidClaims={paidClaims} totalCertified={totalCertified} overdueCount={overdueCount} />
         )}
         {tab === 'claims' && (
-          <ClaimsTab claims={claims} onRefresh={() => qc.invalidateQueries(['claims'])} />
+          <ClaimsTab claims={claims} onRefresh={() => { qc.invalidateQueries(['claims']); qc.invalidateQueries(['payment-certs']); }} />
         )}
         {tab === 'certs' && (
           <CertsTab certs={certs} onRefresh={() => qc.invalidateQueries(['payment-certs'])} />
@@ -165,6 +165,7 @@ function CockpitTab({ claims, certs, totalClaims, paidClaims, totalCertified, ov
 
 function ClaimsTab({ claims, onRefresh }) {
   const [showNew, setShowNew] = useState(false);
+  const [showAuto, setShowAuto] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ claimType: 'progress', claimDate: '', amount: '', description: '', projectId: '' });
 
@@ -185,20 +186,27 @@ function ClaimsTab({ claims, onRefresh }) {
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '16px' }}>
+        <button className="btn ghost" onClick={() => setShowAuto(true)}>
+          <Icon name="zap" size={14} /> Auto Claim (from progress)
+        </button>
         <button className="btn primary" onClick={() => setShowNew(true)}>
           <Icon name="plus" size={14} /> New Claim
         </button>
       </div>
 
+      {showAuto && (
+        <AutoClaimModal projects={projects} onClose={() => setShowAuto(false)} onDone={() => { setShowAuto(false); onRefresh(); }} />
+      )}
+
       <div className="card">
         <table className="tbl">
           <thead>
-            <tr><th>Claim #</th><th>Project</th><th>Type</th><th>Date</th><th>Amount</th><th>Status</th></tr>
+            <tr><th>Claim #</th><th>Project</th><th>Type</th><th>Date</th><th>Amount</th><th>Status</th><th>Actions</th></tr>
           </thead>
           <tbody>
             {claims.length === 0 && (
-              <tr><td colSpan={6}><div className="empty" style={{ padding: '40px' }}>
+              <tr><td colSpan={7}><div className="empty" style={{ padding: '40px' }}>
                 <Icon name="doc" size={32} style={{ color: 'var(--border-strong)' }} />
                 <div className="empty-title">No claims yet</div>
                 <div className="empty-sub">Submit your first progress claim</div>
@@ -207,16 +215,7 @@ function ClaimsTab({ claims, onRefresh }) {
                 </button>
               </div></td></tr>
             )}
-            {claims.map(c => (
-              <tr key={c.id}>
-                <td className="tbl-mono" style={{ color: 'var(--accent)' }}>{c.claim_number || '—'}</td>
-                <td style={{ color: 'var(--text)' }}>{c.project_name || '—'}</td>
-                <td style={{ textTransform: 'capitalize' }}>{c.claim_type}</td>
-                <td>{fmtDate(c.claim_date)}</td>
-                <td className="tbl-mono">{fmt(c.amount)}</td>
-                <td><span className={`pill ${statusPill(c.status)}`}>{c.status}</span></td>
-              </tr>
-            ))}
+            {claims.map(c => <ClaimRow key={c.id} c={c} onRefresh={onRefresh} />)}
           </tbody>
         </table>
       </div>
@@ -269,7 +268,156 @@ function ClaimsTab({ claims, onRefresh }) {
   );
 }
 
-function CertsTab({ certs }) {
+// Claim row with status workflow: submitted → under_review → certified (auto-creates cert) → paid.
+const CLAIM_NEXT = {
+  draft: [['submitted', 'Submit']],
+  submitted: [['under_review', 'Review'], ['rejected', 'Reject']],
+  under_review: [['certified', 'Certify'], ['rejected', 'Reject']],
+  certified: [['paid', 'Mark Paid']],
+};
+function ClaimRow({ c, onRefresh }) {
+  const [busy, setBusy] = useState(false);
+  const next = CLAIM_NEXT[c.status] || [];
+  const setStatus = async (status) => {
+    setBusy(true);
+    try { await api.patch(`/finance/claims/${c.id}/status`, { status }); onRefresh(); }
+    catch (e) { alert(e.response?.data?.error || 'Failed.'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <tr>
+      <td className="tbl-mono" style={{ color: 'var(--accent)' }}>{c.claim_number || '—'}</td>
+      <td style={{ color: 'var(--text)' }}>{c.project_name || '—'}</td>
+      <td style={{ textTransform: 'capitalize' }}>{c.claim_type}{c.source === 'scope' && <span className="pill info" style={{ marginLeft: 6 }}>auto</span>}</td>
+      <td>{fmtDate(c.claim_date)}</td>
+      <td className="tbl-mono">{fmt(c.amount)}</td>
+      <td><span className={`pill ${statusPill(c.status)}`}>{c.status}</span></td>
+      <td>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          {next.map(([s, label]) => (
+            <button key={s} className="btn ghost sm" disabled={busy} onClick={() => setStatus(s)}>{label}</button>
+          ))}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// Build a progress claim from BQ scope work-done-to-date.
+function AutoClaimModal({ projects, onClose, onDone }) {
+  const [projectId, setProjectId] = useState('');
+  const [claimDate, setClaimDate] = useState(new Date().toISOString().split('T')[0]);
+  const [preview, setPreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  const loadPreview = async (pid) => {
+    setProjectId(pid); setPreview(null); setErr('');
+    if (!pid) return;
+    setLoading(true);
+    try {
+      const data = await api.get(`/finance/claims/preview/${pid}`).then(r => r.data);
+      setPreview(data);
+      if (!data.lines.length) setErr('No scope progress to claim. Import a BQ and record site-diary progress first.');
+    } catch (e) { setErr(e.response?.data?.error || 'Failed to load preview.'); }
+    finally { setLoading(false); }
+  };
+
+  const generate = async () => {
+    setSaving(true); setErr('');
+    try {
+      await api.post('/finance/claims/generate', { projectId, claimDate });
+      onDone();
+    } catch (e) { setErr(e.response?.data?.error || 'Failed to generate claim.'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '760px', width: '90%' }}>
+        <div className="modal-head">
+          <span className="modal-title">Auto Claim from Progress</span>
+          <button className="icon-btn" onClick={onClose}><Icon name="x" size={16} /></button>
+        </div>
+        <div className="modal-body">
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <div className="form-group" style={{ flex: 2 }}>
+              <label className="label">Project</label>
+              <select className="input" value={projectId} onChange={e => loadPreview(e.target.value)}>
+                <option value="">Select project…</option>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div className="form-group" style={{ flex: 1 }}>
+              <label className="label">Claim Date</label>
+              <input type="date" className="input" value={claimDate} onChange={e => setClaimDate(e.target.value)} />
+            </div>
+          </div>
+
+          {loading && <p className="page-sub">Calculating work done…</p>}
+          {err && <p style={{ color: 'var(--danger)' }}>{err}</p>}
+
+          {preview && preview.lines.length > 0 && (
+            <>
+              <table className="tbl" style={{ marginTop: '8px' }}>
+                <thead>
+                  <tr><th>Code</th><th>Description</th><th style={{ textAlign: 'right' }}>Done %</th><th style={{ textAlign: 'right' }}>Value to date</th><th style={{ textAlign: 'right' }}>Previously claimed</th><th style={{ textAlign: 'right' }}>This claim</th></tr>
+                </thead>
+                <tbody>
+                  {preview.lines.map((l, i) => (
+                    <tr key={i}>
+                      <td className="tbl-mono">{l.itemCode || '—'}</td>
+                      <td style={{ maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.description}</td>
+                      <td className="tbl-mono" style={{ textAlign: 'right' }}>{Number(l.cumulativePct).toFixed(0)}%</td>
+                      <td className="tbl-mono" style={{ textAlign: 'right' }}>{fmt(l.cumulativeValue)}</td>
+                      <td className="tbl-mono" style={{ textAlign: 'right', color: 'var(--text-dim)' }}>{fmt(l.previousValue)}</td>
+                      <td className="tbl-mono" style={{ textAlign: 'right', color: 'var(--accent)' }}>{fmt(l.thisValue)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '24px', marginTop: '12px', fontSize: '13px' }}>
+                <span>This claim: <strong>{fmt(preview.thisClaim)}</strong></span>
+                <span>Retention: <strong style={{ color: 'var(--warn)' }}>−{fmt(preview.retentionAmount)}</strong></span>
+                <span>Net payable: <strong style={{ color: 'var(--good)' }}>{fmt(preview.netAmount)}</strong></span>
+              </div>
+            </>
+          )}
+        </div>
+        <div className="modal-foot">
+          <button className="btn ghost" onClick={onClose}>Cancel</button>
+          <button className="btn primary" disabled={saving || !preview || preview.thisClaim <= 0} onClick={generate}>
+            {saving ? 'Generating…' : 'Generate Claim'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CertsTab({ certs, onRefresh }) {
+  const [busy, setBusy] = useState(null);
+
+  const setStatus = async (id, status) => {
+    setBusy(id);
+    try {
+      await api.patch(`/finance/payment-certs/${id}`, { status, paidDate: status === 'paid' ? new Date().toISOString().split('T')[0] : null });
+      onRefresh();
+    } catch (e) { alert(e.response?.data?.error || 'Failed.'); }
+    finally { setBusy(null); }
+  };
+
+  const createInvoice = async (id) => {
+    setBusy(id);
+    try {
+      await api.post(`/finance/payment-certs/${id}/invoice`);
+      onRefresh();
+      alert('Invoice created. See the Invoicing module.');
+    } catch (e) { alert(e.response?.data?.error || 'Failed.'); }
+    finally { setBusy(null); }
+  };
+
   if (certs.length === 0) {
     return (
       <div className="empty" style={{ minHeight: '300px' }}>
@@ -283,7 +431,7 @@ function CertsTab({ certs }) {
     <div className="card">
       <table className="tbl">
         <thead>
-          <tr><th>Cert #</th><th>Project</th><th>Certified Amount</th><th>Due Date</th><th>Status</th></tr>
+          <tr><th>Cert #</th><th>Project</th><th>Certified Amount</th><th>Due Date</th><th>Status</th><th>Actions</th></tr>
         </thead>
         <tbody>
           {certs.map(c => (
@@ -293,6 +441,18 @@ function CertsTab({ certs }) {
               <td className="tbl-mono">{fmt(c.certified_amount)}</td>
               <td>{fmtDate(c.due_date)}</td>
               <td><span className={`pill ${statusPill(c.status)}`}>{c.status}</span></td>
+              <td>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {c.status !== 'paid' && (
+                    <button className="btn ghost sm" disabled={busy === c.id} onClick={() => setStatus(c.id, 'paid')}>Mark Paid</button>
+                  )}
+                  {c.invoiced
+                    ? <span className="pill good">invoiced</span>
+                    : <button className="btn ghost sm" disabled={busy === c.id} onClick={() => createInvoice(c.id)}>
+                        <Icon name="doc" size={12} /> Create Invoice
+                      </button>}
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>
