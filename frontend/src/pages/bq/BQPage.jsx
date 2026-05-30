@@ -35,12 +35,12 @@ function AIScopeCard({ onComplete }) {
       detail: ex ? `${ex.itemCount || 0} line item${ex.itemCount === 1 ? '' : 's'} extracted` : null,
     },
     {
-      step: 4, label: 'Quantity & rate parsing',
-      detail: ex ? `${fmtRM(ex.total || 0)} estimated total` : null,
+      step: 4, label: ex?.total ? 'Quantity & rate parsing' : 'Unit & rate parsing',
+      detail: ex ? (ex.total ? `${fmtRM(ex.total)} estimated total` : 'Rate schedule — add quantities to price') : null,
     },
     {
       step: 5, label: 'Draft BQ assembled',
-      detail: ex && ex.itemCount === 0 ? 'No priced rows detected — start manually' : 'Ready to review',
+      detail: ex && ex.itemCount === 0 ? 'No priced rows detected — start manually' : `Ready to review${ex?.viaOcr ? ' · via OCR' : ''}`,
     },
   ];
 
@@ -159,6 +159,12 @@ function AIScopeCard({ onComplete }) {
                 </div>
               ))}
 
+              {step >= 5 && ex?.warning && (
+                <div style={{ fontSize: 11.5, color: 'var(--warn)', background: 'var(--warn-soft, rgba(216,130,0,.1))', padding: '8px 12px', borderRadius: 8, lineHeight: 1.4 }}>
+                  {ex.warning}
+                </div>
+              )}
+
               {step >= 5 && (
                 <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
                   <button className="btn primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => onComplete(createdBQ)}>
@@ -245,6 +251,7 @@ function DocumentsTable({ bqs, loading, onOpen, onNew }) {
               <th>Project</th>
               <th>Status</th>
               <th style={{ textAlign: 'center' }}>Version</th>
+              <th style={{ textAlign: 'right' }}>Items</th>
               <th style={{ textAlign: 'right' }}>Total</th>
               <th>Created</th>
               <th></th>
@@ -252,11 +259,11 @@ function DocumentsTable({ bqs, loading, onOpen, onNew }) {
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-mute)' }}>Loading BQ documents…</td></tr>
+              <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--text-mute)' }}>Loading BQ documents…</td></tr>
             )}
             {!loading && bqs.length === 0 && (
               <tr>
-                <td colSpan={7}>
+                <td colSpan={8}>
                   <div className="empty" style={{ padding: 48 }}>
                     <Icon name="doc" size={32} style={{ color: 'var(--border-strong)' }} />
                     <div className="empty-title">No BQ documents yet</div>
@@ -282,7 +289,12 @@ function DocumentsTable({ bqs, loading, onOpen, onNew }) {
                 <td style={{ color: 'var(--text-dim)', fontSize: 12.5 }}>{bq.project_name || '— standalone'}</td>
                 <td><span className={`pill ${STATUS_PILL[bq.status] || 'outline'}`}>{bq.status}</span></td>
                 <td style={{ textAlign: 'center', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>v{bq.version}</td>
-                <td style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>{fmtRM(bq.total_amount)}</td>
+                <td style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--text-dim)' }}>{bq.item_count ?? 0}</td>
+                <td style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>
+                  {Number(bq.total_amount) > 0
+                    ? fmtRM(bq.total_amount)
+                    : <span style={{ color: 'var(--text-dim)' }} title="Rate schedule — add quantities to price">{fmtRM(bq.rate_total)} <span style={{ fontSize: 10 }}>rates</span></span>}
+                </td>
                 <td style={{ color: 'var(--text-dim)', fontSize: 12 }}>{bq.created_at ? format(new Date(bq.created_at), 'dd MMM yyyy') : '—'}</td>
                 <td><button className="btn sm ghost"><Icon name="chevR" size={12} /></button></td>
               </tr>
@@ -422,8 +434,37 @@ function NewBQModal({ onClose, onCreated }) {
 }
 
 // ── BQ editor ─────────────────────────────────────────────────────────────────
+// Items may arrive from the DB (snake_case: unit_rate, item_code) or be created
+// in-form (camelCase). Normalise to the camelCase shape the editor renders/saves.
+function normalizeItem(it) {
+  return {
+    ...it,
+    itemCode: it.itemCode ?? it.item_code ?? '',
+    unitRate: Number(it.unitRate ?? it.unit_rate ?? 0),
+    quantity: it.quantity ?? '',
+    amount: Number(it.amount ?? 0),
+    id: it.id ?? Date.now() + Math.random(),
+  };
+}
+
 function BQEditor({ bq, onSaved }) {
-  const [items, setItems] = useState(bq.items || []);
+  // The list row carries no items — fetch the full document (with line items) by id.
+  // When opened straight from upload, bq.items is already present and used directly.
+  const { data: detail, isLoading: loadingDetail } = useQuery({
+    queryKey: ['bq', bq.id],
+    queryFn: () => api.get(`/bq/${bq.id}`).then(r => r.data),
+    enabled: !!bq.id,
+  });
+
+  const [items, setItems] = useState(() => (bq.items || []).map(normalizeItem));
+  const [seeded, setSeeded] = useState((bq.items || []).length > 0);
+
+  useEffect(() => {
+    if (!seeded && detail?.items) {
+      setItems(detail.items.map(normalizeItem));
+      setSeeded(true);
+    }
+  }, [detail, seeded]);
   const [saving, setSaving] = useState(false);
   const [newItem, setNewItem] = useState({ description: '', unit: '', quantity: '', unitRate: '', section: '' });
   const set = (k, v) => setNewItem(n => ({ ...n, [k]: v }));
@@ -441,6 +482,10 @@ function BQEditor({ bq, onSaved }) {
   const removeItem = (idx) => setItems(items.filter((_, i) => i !== idx));
   const total = items.reduce((s, i) => s + Number(i.amount || 0), 0);
 
+  const status = detail?.status || bq.status || 'draft';
+  const editable = status === 'draft' || status === 'submitted';
+  const [busy, setBusy] = useState(false);
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -450,6 +495,44 @@ function BQEditor({ bq, onSaved }) {
       alert(err.response?.data?.error || 'Failed to save.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleExport = async (format) => {
+    try {
+      const res = await api.get(`/bq/${bq.id}/export`, { params: { format }, responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(bq.title || 'bq').replace(/[^a-z0-9]+/gi, '_')}.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('Export failed.');
+    }
+  };
+
+  const handleTransition = async (to) => {
+    setBusy(true);
+    try {
+      await api.post(`/bq/${bq.id}/transition`, { to });
+      onSaved();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Transition failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleImportRates = async () => {
+    setBusy(true);
+    try {
+      const res = await api.post(`/bq/${bq.id}/import-rates`);
+      alert(`${res.data.imported} rates added to your rate library.`);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Import failed.');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -466,7 +549,18 @@ function BQEditor({ bq, onSaved }) {
             <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>Total</span>
             <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--accent)', fontFamily: 'JetBrains Mono, monospace' }}>{fmtRM(total)}</span>
           </div>
-          <button className="btn primary sm" onClick={handleSave} disabled={saving}>
+          <button className="btn sm ghost" onClick={() => handleExport('xlsx')} title="Export Excel"><Icon name="download" size={13} /> XLSX</button>
+          <button className="btn sm ghost" onClick={() => handleExport('pdf')} title="Export PDF"><Icon name="download" size={13} /> PDF</button>
+          <button className="btn sm ghost" onClick={handleImportRates} disabled={busy} title="Add these rates to your rate library">
+            <Icon name="plus" size={13} /> To rate library
+          </button>
+          {status === 'draft' && (
+            <button className="btn sm" onClick={() => handleTransition('submitted')} disabled={busy}>Submit</button>
+          )}
+          {status === 'submitted' && (
+            <button className="btn sm" style={{ background: 'var(--good)', color: '#fff' }} onClick={() => handleTransition('approved')} disabled={busy}>Approve</button>
+          )}
+          <button className="btn primary sm" onClick={handleSave} disabled={saving || !editable} title={editable ? '' : `Locked (${status})`}>
             <Icon name="check" size={13} /> {saving ? 'Saving…' : 'Save BQ'}
           </button>
         </div>
@@ -506,7 +600,9 @@ function BQEditor({ bq, onSaved }) {
             </thead>
             <tbody>
               {items.length === 0 && (
-                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-mute)' }}>No items yet — add your first line item above.</td></tr>
+                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-mute)' }}>
+                  {(loadingDetail && !seeded) ? 'Loading line items…' : 'No items yet — add your first line item above.'}
+                </td></tr>
               )}
               {items.map((item, idx) => (
                 <tr key={item.id || idx}>

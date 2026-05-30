@@ -16,6 +16,20 @@ const UNIT_TOKENS = [
 ];
 const UNIT_SET = new Set(UNIT_TOKENS.map(u => u.toLowerCase()));
 
+// Matches a standalone "unit price" line (e.g. "m 6.00", "m2 12.50", "nr 100"),
+// as used in JKR-style Schedule-of-Rates documents. Longest units first so "m2"
+// wins over "m". Anchored, so it won't fire on prose that merely starts with a unit.
+const UNIT_ALT = UNIT_TOKENS.slice().sort((a, b) => b.length - a.length)
+  .map(u => u.replace(/\./g, '\\.')).join('|');
+const NUM = '\\d{1,3}(?:,\\d{3})*(?:\\.\\d+)?|\\d+(?:\\.\\d+)?';
+// `\\.?` after the unit absorbs abbreviation dots ("kg.", "no.") not in the token list.
+const RATE_LINE_RE = new RegExp(`^(${UNIT_ALT})\\.?\\s+(${NUM})$`, 'i');
+// Same, but anchored only at the end — for items where the unit+rate trail the
+// description on the same line (e.g. "…siku no. 3.11", "…rod keluli lembut kg. 3.10").
+const TRAIL_RATE_RE = new RegExp(`\\b(${UNIT_ALT})\\.?\\s+(${NUM})\\s*$`, 'i');
+// Item code at the start of a line: AA0000, B12, 1.10, MS96.1, etc.
+const CODE_RE = /^([A-Z]{1,4}\d{2,5}(?:\.\d+)?|\d{1,3}\.\d{1,3})\s+(.*)$/;
+
 // Section / trade header keywords — a line that looks like one of these (and has
 // no trailing money column) is treated as a section divider, not a priced item.
 const SECTION_HINTS = [
@@ -117,35 +131,149 @@ function parseLine(rawLine) {
   };
 }
 
-async function extractFromPdf(filePath) {
-  const pdfParse = require('pdf-parse');
-  const buffer = fs.readFileSync(filePath);
-  const data = await pdfParse(buffer);
-  const pages = data.numpages || 0;
-  const lines = data.text.split(/\r?\n/);
+// Repeating page furniture to ignore (titles, column headers, bare page numbers).
+function isNoise(line) {
+  if (/^\d{1,4}$/.test(line)) return true;                       // bare page number
+  if (/\bKOD\b.*\bKETERANGAN\b/i.test(line)) return true;        // SoR column header
+  if (/JADUAL\s+KADAR\s+HARGA/i.test(line)) return true;         // JKR running title
+  return false;
+}
 
+// JKR / JKH "Jadual Kadar Harga" — Schedule of Rates. Layout:
+//   AA0000 SECTION TITLE              ← code ending in 00, no price → section header
+//   AA0101 multi-line description…
+//   m 6.00                            ← standalone "unit rate" line closes the item
+// These are rate catalogues: there is a unit and a rate, but no quantity/amount.
+function parseScheduleOfRates(pages) {
+  const items = [];
+  const sections = new Set();
+  let currentSection = '';
+  let pending = null; // { code, descLines: [] }
+
+  const emit = (code, description, unit, rate) => {
+    const desc = description.replace(/\s+/g, ' ').trim();
+    if (!desc) return;
+    const u = String(unit || '').replace(/\.+$/, '').toLowerCase(); // "no." → "no"
+    items.push({ itemCode: code, section: currentSection, description: desc, unit: u, quantity: null, unitRate: rate, amount: 0 });
+    if (currentSection) sections.add(currentSection);
+  };
+
+  // A code that never received a rate is a section/category header.
+  const flushAsHeader = () => {
+    if (pending) {
+      const title = (pending.descLines[0] || '').replace(/\s+/g, ' ').trim();
+      if (title) { currentSection = title.slice(0, 120); sections.add(currentSection); }
+      pending = null;
+    }
+  };
+
+  for (const page of pages) {
+    for (const raw of page.text.split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line || isNoise(line)) continue;
+
+      // (a) A standalone "unit rate" line closes a multi-line item.
+      const rate = line.match(RATE_LINE_RE);
+      if (rate && pending) {
+        emit(pending.code, pending.descLines.join(' '), rate[1], cleanNum(rate[2]));
+        pending = null;
+        continue;
+      }
+
+      // (b) A new item code begins the line.
+      const code = line.match(CODE_RE);
+      if (code) {
+        flushAsHeader();
+        const rest = code[2] || '';
+        const trail = rest.match(TRAIL_RATE_RE);
+        if (trail) {
+          // Inline item: code + description + unit + rate all on one line.
+          emit(code[1], rest.slice(0, trail.index), trail[1], cleanNum(trail[2]));
+          pending = null;
+        } else {
+          pending = { code: code[1], descLines: rest ? [rest] : [] };
+        }
+        continue;
+      }
+
+      // (c) A continuation line whose tail carries the unit+rate closes the item.
+      const trail = line.match(TRAIL_RATE_RE);
+      if (trail && pending) {
+        const tail = line.slice(0, trail.index).trim();
+        if (tail) pending.descLines.push(tail);
+        emit(pending.code, pending.descLines.join(' '), trail[1], cleanNum(trail[2]));
+        pending = null;
+        continue;
+      }
+
+      // (d) Otherwise it's a continuation of the current description.
+      if (pending) pending.descLines.push(line);
+    }
+  }
+  flushAsHeader();
+  return { items, sections: [...sections] };
+}
+
+// Generic priced BQ: one line per item, "[code] desc unit qty rate amount".
+function parseGenericLines(pages) {
   const items = [];
   const sections = new Set();
   let currentSection = '';
 
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (!line) continue;
+  for (const page of pages) {
+    for (const raw of page.text.split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line || isNoise(line)) continue;
 
-    if (looksLikeSection(line) && !NUM_RE.test(line.replace(/[a-z]/gi, ''))) {
-      currentSection = line.replace(/\s+/g, ' ').slice(0, 120);
-      sections.add(currentSection);
-      continue;
-    }
-    const item = parseLine(line);
-    if (item) {
-      item.section = item.section || currentSection;
-      if (item.section) sections.add(item.section);
-      items.push(item);
+      if (looksLikeSection(line) && !NUM_RE.test(line.replace(/[a-z]/gi, ''))) {
+        currentSection = line.replace(/\s+/g, ' ').slice(0, 120);
+        sections.add(currentSection);
+        continue;
+      }
+      const item = parseLine(line);
+      if (item) {
+        item.section = item.section || currentSection;
+        if (item.section) sections.add(item.section);
+        items.push(item);
+      }
     }
   }
+  return { items, sections: [...sections] };
+}
 
-  return { items, sections: [...sections], pages, lineCount: lines.length };
+// Dispatch to the right parser based on document shape.
+function parseTextPages(pages) {
+  const sample = pages.slice(0, 3).map(p => p.text).join('\n');
+  const isScheduleOfRates =
+    /\bKOD\b/i.test(sample) && /\bKETERANGAN\b/i.test(sample) && /\bHARGA\b/i.test(sample);
+  return isScheduleOfRates ? parseScheduleOfRates(pages) : parseGenericLines(pages);
+}
+
+async function extractFromPdf(filePath) {
+  const { PDFParse } = require('pdf-parse');
+  const data = new Uint8Array(fs.readFileSync(filePath));
+  const parser = new PDFParse({ data });
+
+  try {
+    const txt = await parser.getText();
+    const pageCount = txt.total || txt.pages.length;
+    const denseChars = (txt.text || '').replace(/\s/g, '').length;
+    const avgPerPage = pageCount ? denseChars / pageCount : 0;
+
+    // Scanned / image-only PDF (no extractable text) → OCR fallback.
+    if (avgPerPage < 20) {
+      const { ocrScreenshots } = require('./ocrTextract');
+      const shots = await parser.getScreenshot({ scale: 2, imageBuffer: true, imageDataUrl: false });
+      const ocrPages = await ocrScreenshots(shots.pages);
+      const parsed = parseTextPages(ocrPages);
+      return { ...parsed, pages: pageCount, lineCount: ocrPages.length, viaOcr: true };
+    }
+
+    const parsed = parseTextPages(txt.pages);
+    return { ...parsed, pages: pageCount, lineCount: txt.pages.length, viaOcr: false };
+  } finally {
+    await parser.destroy().catch(() => {});
+  }
 }
 
 function extractFromExcel(filePath) {
@@ -239,7 +367,9 @@ async function extract(filePath, originalName) {
     return { items: [], sections: [], pages: 0, lineCount: 0, total: 0 };
   }
   result.total = result.items.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  // Count distinct units priced — useful signal for rate-schedule imports.
+  result.viaOcr = result.viaOcr || false;
   return result;
 }
 
-module.exports = { extract, parseLine };
+module.exports = { extract, parseLine, parseScheduleOfRates, parseGenericLines };
