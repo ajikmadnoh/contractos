@@ -14,6 +14,12 @@ dist/
 build/
 frontend/dist/
 
+# Runtime uploads (tender sources, diary photos)
+backend/uploads/
+
+# Stray root lockfile (no root package.json)
+/package-lock.json
+
 # Logs
 *.log
 npm-debug.log*

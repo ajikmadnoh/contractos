@@ -3,6 +3,7 @@ const router = express.Router();
 
 const authRoutes          = require('./auth.routes');
 const projectRoutes       = require('./projects.routes');
+const trackingRoutes      = require('./tracking.routes');
 const invoiceRoutes       = require('./invoices.routes');
 const hrRoutes            = require('./hr.routes');
 const financeRoutes       = require('./finance.routes');
@@ -19,6 +20,7 @@ const documentsRoutes     = require('./documents.routes');
 
 router.use('/auth',          authRoutes);
 router.use('/projects',      projectRoutes);
+router.use('/projects',      trackingRoutes);
 router.use('/invoices',      invoiceRoutes);
 router.use('/hr',            hrRoutes);
 router.use('/finance',       financeRoutes);

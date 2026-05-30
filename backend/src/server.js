@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -26,6 +27,12 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 // Parse JSON request bodies
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Serve uploaded files (diary photos, tender sources). Filenames are UUIDs,
+// so they're effectively unguessable; helmet's CORP is relaxed for cross-origin <img>.
+app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
+  setHeaders: (res) => res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'),
+}));
 
 // Attach db helpers to every request so routes can use req.db.query()
 app.use((req, res, next) => {

@@ -8,6 +8,7 @@ import VerifyEmailPage from './pages/auth/VerifyEmailPage';
 import SetupWizardPage from './pages/auth/SetupWizardPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import ProjectsPage from './pages/projects/ProjectsPage';
+import ProjectDetailPage from './pages/projects/ProjectDetailPage';
 import FinancePage from './pages/finance/FinancePage';
 import InvoicingPage from './pages/invoicing/InvoicingPage';
 import HRPage from './pages/hr/HRPage';
@@ -47,6 +48,7 @@ export default function App() {
       <Route path="/dashboard" element={<PrivateRoute><DashboardLayout /></PrivateRoute>}>
         <Route index element={<DashboardPage />} />
         <Route path="projects" element={<ProjectsPage />} />
+        <Route path="projects/:id" element={<ProjectDetailPage />} />
         <Route path="finance" element={<FinancePage />} />
         <Route path="invoicing" element={<InvoicingPage />} />
         <Route path="hr" element={<HRPage />} />
