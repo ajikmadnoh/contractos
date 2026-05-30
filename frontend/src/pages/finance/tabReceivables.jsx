@@ -5,7 +5,7 @@ import Icon from '../../components/Icon';
 import { Legend, fmtShort, fmtNum } from './finCharts';
 import { AR_MATRIX } from './finData';
 
-export default function FinanceReceivables({ matrix }) {
+export default function FinanceReceivables({ matrix, dunning, onSendAll }) {
   return (
     <>
       <div className="card rise rise-1">
@@ -28,11 +28,11 @@ export default function FinanceReceivables({ matrix }) {
         <div className="card rise rise-2" style={{ gridColumn: 'span 7' }}>
           <div className="card-head">
             <h3>Dunning queue</h3>
-            <span className="sub">7 invoices flagged · auto-reminders staged</span>
+            <span className="sub">{(dunning && dunning.length) || 7} invoices flagged · auto-reminders staged</span>
             <div className="spacer" />
-            <button className="btn sm"><Icon name="send" size={12} /> Send all reminders</button>
+            <button className="btn sm" onClick={onSendAll}><Icon name="send" size={12} /> Send all reminders</button>
           </div>
-          <DunningQueue />
+          <DunningQueue rows={dunning} />
         </div>
         <div className="card rise rise-3" style={{ gridColumn: 'span 5' }}>
           <div className="card-head"><h3>Payer scorecards</h3><span className="sub">Behaviour over last 12 months</span></div>
@@ -109,8 +109,8 @@ function AgingMatrix({ matrix }) {
   );
 }
 
-function DunningQueue() {
-  const rows = [
+function DunningQueue({ rows: liveRows }) {
+  const seed = [
     { id: 'INV-2026-0421', client: 'Pavilion Damansara',  proj: 'PVDH-T3', amt: 4_820_000, days: 7,  stage: 2, last: '11 May', next: 'WhatsApp + email reminder', action: 'Send' },
     { id: 'INV-2026-0398', client: 'DBKL · KL City Hall', proj: 'KLCC-EB', amt: 1_240_000, days: 35, stage: 3, last: '07 May', next: 'Phone — Mr Karim', action: 'Call' },
     { id: 'INV-2026-0387', client: 'DBKL · KL City Hall', proj: 'KLCC-EB', amt: 1_120_000, days: 62, stage: 4, last: '02 May', next: 'Formal demand letter', action: 'Letter' },
@@ -119,6 +119,7 @@ function DunningQueue() {
     { id: 'INV-2026-0354', client: 'Sutera Harbour',      proj: 'KKM-RES', amt: 320_000,   days: 78, stage: 4, last: '03 May', next: 'Formal demand letter', action: 'Letter' },
     { id: 'INV-2026-0408', client: 'Pavilion Damansara',  proj: 'PVDH-T3', amt: 280_000,   days: 12, stage: 1, last: '12 May', next: 'Email — gentle reminder', action: 'Send' },
   ];
+  const rows = liveRows && liveRows.length ? liveRows : seed;
   const stageLabel = (s) => ['—', 'Reminder 1', 'Reminder 2', 'Phone', 'Demand letter', 'CIPAA notice'][s] || '—';
   const stageTone = (s) => ['outline', 'info', 'warn', 'warn', 'danger', 'danger'][s];
   return (

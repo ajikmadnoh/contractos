@@ -494,6 +494,58 @@ router.get('/aging-matrix', authenticate, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── DUNNING (AR collections) ─────────────────────────────────────────────────
+
+// Map days-overdue to a collections stage + next action, mirroring the UI.
+const dunningStage = (days) => {
+  if (days >= 90) return { stage: 5, next: 'CIDB CIPAA notice', action: 'Escalate' };
+  if (days >= 45) return { stage: 4, next: 'Formal demand letter', action: 'Letter' };
+  if (days >= 30) return { stage: 3, next: 'Phone call — follow up', action: 'Call' };
+  if (days >= 14) return { stage: 2, next: 'WhatsApp + email reminder', action: 'Send' };
+  return { stage: 1, next: 'Email — gentle reminder', action: 'Send' };
+};
+
+// GET /finance/dunning — due/overdue invoices with collections stage. [] → UI sample.
+router.get('/dunning', authenticate, async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT i.invoice_number AS id,
+              COALESCE(pr.company_name, '—') AS client,
+              p.name AS project_name,
+              (i.total - COALESCE(i.amount_paid, 0)) AS amt,
+              (CURRENT_DATE - i.due_date) AS days,
+              to_char(i.last_reminder_sent, 'DD Mon') AS last
+       FROM invoices i
+       LEFT JOIN projects p ON i.project_id = p.id
+       LEFT JOIN profiles pr ON i.client_id = pr.id
+       WHERE i.tenant_id = $1
+         AND i.status IN ('unpaid','partially_paid','overdue')
+         AND i.due_date IS NOT NULL AND i.due_date <= CURRENT_DATE
+       ORDER BY (CURRENT_DATE - i.due_date) DESC`,
+      [req.user.tenant_id]
+    );
+    const rows = result.rows.map(r => {
+      const days = n(r.days);
+      const s = dunningStage(days);
+      return {
+        id: r.id, client: r.client,
+        proj: (r.project_name || 'PROJ').split(/[\s—-]/)[0].slice(0, 7).toUpperCase(),
+        amt: n(r.amt), days, last: r.last || '—', ...s,
+      };
+    });
+    res.json(rows);
+  } catch (err) { next(err); }
+});
+
+// POST /finance/dunning/send-all — fire the weekly invoice escalation sweep for
+// this tenant (notifies stakeholders + stamps last_reminder_sent).
+router.post('/dunning/send-all', authenticate, authorize(ROLES.DIRECTOR, ROLES.ADMIN, ROLES.FINANCE), async (req, res, next) => {
+  try {
+    const result = await automation.runWeeklyInvoiceEscalation(req.user.tenant_id);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
 // ── BONDS & INSURANCE ────────────────────────────────────────────────────────
 
 router.get('/bonds', authenticate, async (req, res, next) => {

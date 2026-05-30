@@ -2,7 +2,7 @@
 // Retention & Bonds, MyInvois). UI ported from the ConstructOS design; live data
 // from the finance API overrides the design's representative figures where present.
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import Icon from '../../components/Icon';
 import { fmtShort } from './finCharts';
@@ -45,14 +45,28 @@ function mapCert(c) {
 
 export default function FinancePage() {
   const [tab, setTab] = useState('cockpit');
+  const qc = useQueryClient();
 
   const { data: cockpit } = useQuery({ queryKey: ['fin-cockpit'], queryFn: () => api.get('/finance/cockpit').then(r => r.data).catch(() => null) });
   const { data: aging } = useQuery({ queryKey: ['fin-aging'], queryFn: () => api.get('/finance/aging-matrix').then(r => r.data).catch(() => null) });
+  const { data: dunning = [] } = useQuery({ queryKey: ['fin-dunning'], queryFn: () => api.get('/finance/dunning').then(r => r.data).catch(() => []) });
   const { data: liveCerts = [] } = useQuery({ queryKey: ['payment-certs'], queryFn: () => api.get('/finance/payment-certs').then(r => r.data).catch(() => []) });
   const { data: bonds = [] } = useQuery({ queryKey: ['fin-bonds'], queryFn: () => api.get('/finance/bonds').then(r => r.data).catch(() => []) });
   const { data: statutory = [] } = useQuery({ queryKey: ['fin-statutory'], queryFn: () => api.get('/finance/statutory').then(r => r.data).catch(() => []) });
 
   const certs = (liveCerts || []).map(mapCert);
+
+  const sendAllReminders = async () => {
+    try {
+      const r = await api.post('/finance/dunning/send-all').then(x => x.data);
+      window.alert(`Reminders sent — ${r?.escalated ?? 0} overdue invoice(s) escalated.`);
+    } catch {
+      window.alert('Could not send reminders. Please try again.');
+    } finally {
+      qc.invalidateQueries({ queryKey: ['fin-dunning'] });
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+    }
+  };
 
   return (
     <div className="fin">
@@ -93,7 +107,7 @@ export default function FinancePage() {
 
       <div className="page-body" style={{ paddingTop: 12 }}>
         {tab === 'cockpit' && <FinanceCockpit live={cockpit || {}} statutory={statutory} />}
-        {tab === 'ar'      && <FinanceReceivables matrix={aging} />}
+        {tab === 'ar'      && <FinanceReceivables matrix={aging} dunning={dunning} onSendAll={sendAllReminders} />}
         {tab === 'certs'   && <FinancePaymentCerts certs={certs} />}
         {tab === 'retent'  && <FinanceRetention bonds={bonds} />}
         {tab === 'einv'    && <FinanceMyInvois />}
