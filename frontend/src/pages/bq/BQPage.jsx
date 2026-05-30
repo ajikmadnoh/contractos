@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import api from '../../lib/api';
 import Icon from '../../components/Icon';
@@ -232,7 +232,58 @@ function StatusFunnel({ bqs }) {
 }
 
 // ── Documents table ─────────────────────────────────────────────────────────────
-function DocumentsTable({ bqs, loading, onOpen, onNew }) {
+// Inline two-step delete button — first click arms it (red Confirm?), second fires.
+// Auto-disarms after 3 s so an accidental click is forgiving.
+function DeleteBQButton({ bqId, onDeleted }) {
+  const [armed, setArmed] = useState(false);
+  const timer = useRef(null);
+
+  const { mutate, isPending } = useMutation({
+    mutationFn: () => api.delete(`/bq/${bqId}`),
+    onSuccess: onDeleted,
+    onError: (err) => alert(err.response?.data?.error || 'Delete failed.'),
+  });
+
+  const handleClick = (e) => {
+    e.stopPropagation(); // don't open the editor row
+    if (!armed) {
+      setArmed(true);
+      timer.current = setTimeout(() => setArmed(false), 3000);
+    } else {
+      clearTimeout(timer.current);
+      mutate();
+    }
+  };
+
+  // Disarm on blur (e.g. user clicks elsewhere)
+  const handleBlur = () => { clearTimeout(timer.current); setArmed(false); };
+
+  return (
+    <button
+      className="btn sm ghost"
+      onClick={handleClick}
+      onBlur={handleBlur}
+      disabled={isPending}
+      title={armed ? 'Click again to confirm delete' : 'Delete BQ'}
+      style={{
+        color: armed ? 'var(--danger)' : undefined,
+        borderColor: armed ? 'var(--danger)' : undefined,
+        fontWeight: armed ? 600 : undefined,
+        transition: 'color .15s, border-color .15s',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {isPending
+        ? <Icon name="refresh" size={12} />
+        : armed
+          ? <><Icon name="alert" size={12} /> Confirm?</>
+          : <Icon name="x" size={12} />
+      }
+    </button>
+  );
+}
+
+function DocumentsTable({ bqs, loading, onOpen, onNew, onDeleted }) {
   return (
     <div className="card rise rise-3">
       <div className="card-head">
@@ -296,7 +347,14 @@ function DocumentsTable({ bqs, loading, onOpen, onNew }) {
                     : <span style={{ color: 'var(--text-dim)' }} title="Rate schedule — add quantities to price">{fmtRM(bq.rate_total)} <span style={{ fontSize: 10 }}>rates</span></span>}
                 </td>
                 <td style={{ color: 'var(--text-dim)', fontSize: 12 }}>{bq.created_at ? format(new Date(bq.created_at), 'dd MMM yyyy') : '—'}</td>
-                <td><button className="btn sm ghost"><Icon name="chevR" size={12} /></button></td>
+                <td>
+                  <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
+                    <button className="btn sm ghost" onClick={() => onOpen(bq)} title="Open">
+                      <Icon name="chevR" size={12} />
+                    </button>
+                    <DeleteBQButton bqId={bq.id} onDeleted={onDeleted} />
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -332,7 +390,11 @@ export default function BQPage() {
           </div>
         </div>
         <div className="page-body">
-          <BQEditor bq={selected} onSaved={() => { setSelected(null); qc.invalidateQueries(['bqs']); }} />
+          <BQEditor
+            bq={selected}
+            onSaved={() => { setSelected(null); qc.invalidateQueries(['bqs']); }}
+            onDeleted={() => { setSelected(null); qc.invalidateQueries({ queryKey: ['bqs'] }); }}
+          />
         </div>
       </>
     );
@@ -366,6 +428,7 @@ export default function BQPage() {
           loading={isLoading}
           onOpen={setSelected}
           onNew={() => setShowNew(true)}
+          onDeleted={() => { qc.invalidateQueries({ queryKey: ['bqs'] }); setSelected(null); }}
         />
       </div>
 
@@ -447,7 +510,7 @@ function normalizeItem(it) {
   };
 }
 
-function BQEditor({ bq, onSaved }) {
+function BQEditor({ bq, onSaved, onDeleted }) {
   // The list row carries no items — fetch the full document (with line items) by id.
   // When opened straight from upload, bq.items is already present and used directly.
   const { data: detail, isLoading: loadingDetail } = useQuery({
@@ -563,6 +626,8 @@ function BQEditor({ bq, onSaved }) {
           <button className="btn primary sm" onClick={handleSave} disabled={saving || !editable} title={editable ? '' : `Locked (${status})`}>
             <Icon name="check" size={13} /> {saving ? 'Saving…' : 'Save BQ'}
           </button>
+          <span style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 4px' }} />
+          <DeleteBQButton bqId={bq.id} onDeleted={onDeleted} />
         </div>
         <div className="card-body">
           <div style={{ display: 'grid', gridTemplateColumns: '3fr 4fr 1fr 1fr 1.5fr auto', gap: 8, alignItems: 'center' }}>
