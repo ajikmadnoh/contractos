@@ -6,12 +6,12 @@ import api from '../lib/api';
 import Icon from './Icon';
 
 const TYPE_ICON = {
-  alert: '⚠️',
-  payment: '💰',
-  hr: '👥',
-  project: '📁',
-  system: '🔔',
-  safety: '🛡️',
+  alert: 'alert',
+  payment: 'money',
+  hr: 'users',
+  project: 'folder',
+  system: 'bell',
+  safety: 'shield',
 };
 
 export default function NotificationBell() {
@@ -138,9 +138,9 @@ export default function NotificationBell() {
                   style={{
                     display: 'flex', alignItems: 'flex-start', gap: 10,
                     width: '100%', padding: '10px 14px',
+                    border: 'none',
                     borderBottom: '1px solid var(--border)',
                     background: !n.is_read ? 'var(--surface-2)' : 'transparent',
-                    border: 'none', borderBottom: '1px solid var(--border)',
                     cursor: n.link ? 'pointer' : 'default',
                     textAlign: 'left',
                     transition: 'background .15s',
@@ -148,8 +148,14 @@ export default function NotificationBell() {
                   onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-2)'; }}
                   onMouseLeave={e => { e.currentTarget.style.background = !n.is_read ? 'var(--surface-2)' : 'transparent'; }}
                 >
-                  <span style={{ fontSize: 16, lineHeight: 1, marginTop: 1, flexShrink: 0 }}>
-                    {TYPE_ICON[n.type] || '🔔'}
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: 22, height: 22, borderRadius: 6,
+                    background: !n.is_read ? 'var(--accent-soft)' : 'var(--bg-2)',
+                    color: !n.is_read ? 'var(--accent-2)' : 'var(--text-dim)',
+                    flexShrink: 0, marginTop: 1
+                  }}>
+                    <Icon name={TYPE_ICON[n.type] || 'bell'} size={12} />
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{

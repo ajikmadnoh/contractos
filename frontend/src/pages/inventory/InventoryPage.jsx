@@ -143,7 +143,13 @@ function ItemsTab() {
                     <td className="py-3 px-4 text-right text-gray-400">RM {parseFloat(item.unit_cost || 0).toFixed(2)}</td>
                     <td className="py-3 px-4 text-right text-gold">RM {totalVal.toLocaleString('en-MY', { maximumFractionDigits: 0 })}</td>
                     <td className="py-3 px-4">
-                      {isLow ? <span className="badge-warning">⚠ Low Stock</span> : <span className="badge-success">OK</span>}
+                      {isLow ? (
+                        <span className="badge-warning" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <Icon name="alert" size={12} /> Low Stock
+                        </span>
+                      ) : (
+                        <span className="badge-success">OK</span>
+                      )}
                     </td>
                     <td className="py-3 px-4">
                       <button onClick={() => setShowMovement(item)} className="text-xs text-gold hover:underline">In/Out</button>
@@ -225,11 +231,11 @@ function ItemsTab() {
                 <div className="grid grid-cols-2 gap-3">
                   <label className="flex items-center gap-2 p-3 rounded-lg border border-navy-light cursor-pointer has-[:checked]:border-success has-[:checked]:bg-success/10">
                     <input type="radio" value="in" {...movForm.register('transaction_type', { required: true })} className="accent-green-500" />
-                    <span className="text-sm text-white">📥 Stock In</span>
+                    <span className="text-sm text-white" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Icon name="arrowD" size={13} style={{ color: 'var(--good)' }} /> Stock In</span>
                   </label>
                   <label className="flex items-center gap-2 p-3 rounded-lg border border-navy-light cursor-pointer has-[:checked]:border-gold has-[:checked]:bg-gold/10">
                     <input type="radio" value="out" {...movForm.register('transaction_type', { required: true })} className="accent-yellow-500" />
-                    <span className="text-sm text-white">📤 Stock Out</span>
+                    <span className="text-sm text-white" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Icon name="arrowU" size={13} style={{ color: 'var(--warn)' }} /> Stock Out</span>
                   </label>
                 </div>
               </div>
@@ -286,7 +292,10 @@ function TransactionsTab() {
               <td className="py-3 px-4 text-white">{t.item_name}</td>
               <td className="py-3 px-4">
                 <span className={t.transaction_type === 'in' ? 'badge-success' : 'badge-warning'}>
-                  {t.transaction_type === 'in' ? '📥 Stock In' : '📤 Stock Out'}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Icon name={t.transaction_type === 'in' ? 'arrowD' : 'arrowU'} size={12} />
+                    {t.transaction_type === 'in' ? 'Stock In' : 'Stock Out'}
+                  </span>
                 </span>
               </td>
               <td className={`py-3 px-4 text-right font-bold ${t.transaction_type === 'in' ? 'text-success' : 'text-yellow-400'}`}>

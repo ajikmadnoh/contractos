@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import api from '../../lib/api';
+import Icon from '../../components/Icon';
 
-const TYPE_ICON = { subcon:'🏗️', client:'🤝', supplier:'📦', main_contractor:'🏢', organisation:'🏛️' };
+const TYPE_ICON = { subcon:'building', client:'handshake', supplier:'package', main_contractor:'building', organisation:'organisation' };
 const TYPE_COLOUR = {
   subcon:'border-blue-500', client:'border-gold', supplier:'border-green-500',
   main_contractor:'border-purple-500', organisation:'border-gray-500',
@@ -48,11 +49,11 @@ export default function ProfilesPage() {
       {/* Summary strip */}
       <div style={{ padding: '12px 32px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {[
-          { label: 'Clients', type: 'client', icon: '🤝' },
-          { label: 'Subcontractors', type: 'subcon', icon: '🏗️' },
-          { label: 'Suppliers', type: 'supplier', icon: '📦' },
-          { label: 'Main Contractors', type: 'main_contractor', icon: '🏢' },
-          { label: 'Organisations', type: 'organisation', icon: '🏛️' },
+          { label: 'Clients', type: 'client', icon: 'handshake' },
+          { label: 'Subcontractors', type: 'subcon', icon: 'building' },
+          { label: 'Suppliers', type: 'supplier', icon: 'package' },
+          { label: 'Main Contractors', type: 'main_contractor', icon: 'building' },
+          { label: 'Organisations', type: 'organisation', icon: 'organisation' },
         ].map(({ label, type, icon }) => {
           const count = allProfiles.filter(p => p.profile_type === type).length;
           const active = typeFilter === type;
@@ -63,8 +64,9 @@ export default function ProfilesPage() {
                 borderColor: active ? 'var(--accent)' : 'var(--border)',
                 background: active ? 'var(--accent-soft)' : 'transparent',
                 cursor: 'pointer', padding: '5px 12px', borderRadius: 20,
+                transition: 'all 0.15s ease'
               }}>
-              <span style={{ fontSize: 14 }}>{icon}</span>
+              <Icon name={icon} size={14} style={{ color: active ? 'var(--accent-2)' : 'var(--text-mute)' }} />
               <span style={{ fontSize: 12, color: active ? 'var(--accent-2)' : 'var(--text-mute)' }}>{label}</span>
               <span style={{ fontSize: 13, fontWeight: 700, color: active ? 'var(--accent-2)' : 'var(--text)', minWidth: 16, textAlign: 'center' }}>{count}</span>
             </button>
@@ -83,7 +85,13 @@ export default function ProfilesPage() {
           <p style={{ color: 'var(--text-mute)', fontSize: 14 }}>Loading...</p>
         ) : profiles.length === 0 ? (
           <div className="card" style={{ textAlign: 'center', padding: '64px 24px' }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>🏢</div>
+            <div style={{ 
+              width: 64, height: 64, borderRadius: 16, background: 'var(--surface-3)', 
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', 
+              margin: '0 auto 16px', color: 'var(--text-mute)' 
+            }}>
+              <Icon name="building" size={32} />
+            </div>
             <h3 style={{ color: 'var(--text)', fontWeight: 600, marginBottom: 8 }}>No profiles yet</h3>
             <p style={{ color: 'var(--text-mute)', fontSize: 14, marginBottom: 24 }}>Add your clients, subcontractors and suppliers here.</p>
             <button onClick={() => setShowNew(true)} className="btn primary">Add First Profile</button>
@@ -100,15 +108,22 @@ export default function ProfilesPage() {
                 onMouseLeave={e => e.currentTarget.style.boxShadow = ''}
               >
                 <div className="flex items-start justify-between mb-3">
-                  <span style={{ fontSize: 24 }}>{TYPE_ICON[p.profile_type]}</span>
-                  <span style={{ fontSize: 10, color: 'var(--text-mute)', background: 'rgba(255,255,255,.06)', padding: '2px 8px', borderRadius: 99 }}>
+                  <span style={{ 
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', 
+                    width: 42, height: 42, borderRadius: 10, 
+                    background: 'var(--surface-3)', color: 'var(--accent)',
+                    flexShrink: 0 
+                  }}>
+                    <Icon name={TYPE_ICON[p.profile_type] || 'user'} size={20} />
+                  </span>
+                  <span style={{ fontSize: 10, color: 'var(--text-mute)', background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 99 }}>
                     {TYPE_LABEL[p.profile_type] || p.profile_type}
                   </span>
                 </div>
-                <h3 style={{ color: 'var(--text)', fontWeight: 600, marginBottom: 4 }}>{p.company_name}</h3>
-                {p.contact_person && <p style={{ color: 'var(--text-mute)', fontSize: 12, marginBottom: 2 }}>👤 {p.contact_person}</p>}
-                {p.email && <p style={{ color: 'var(--text-mute)', fontSize: 12, marginBottom: 2 }}>✉️ {p.email}</p>}
-                {p.phone && <p style={{ color: 'var(--text-mute)', fontSize: 12 }}>📞 {p.phone}</p>}
+                <h3 style={{ color: 'var(--text)', fontWeight: 600, marginBottom: 10 }}>{p.company_name}</h3>
+                {p.contact_person && <p style={{ color: 'var(--text-mute)', fontSize: 12, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="user" size={12} /> {p.contact_person}</p>}
+                {p.email && <p style={{ color: 'var(--text-mute)', fontSize: 12, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="send" size={12} /> {p.email}</p>}
+                {p.phone && <p style={{ color: 'var(--text-mute)', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="contacts" size={12} /> {p.phone}</p>}
                 {p.registration_number && (
                   <p style={{ color: 'var(--text-dim)', fontSize: 11, marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,.06)', fontFamily: 'monospace' }}>
                     {p.registration_number}
@@ -117,18 +132,18 @@ export default function ProfilesPage() {
                 {(p.project_count > 0 || p.invoice_count > 0 || p.cert_count > 0) && (
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,.06)' }}>
                     {p.project_count > 0 && (
-                      <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 99, background: 'var(--accent-soft)', color: 'var(--accent-2)' }}>
-                        🏗️ {p.project_count} project{p.project_count !== 1 ? 's' : ''}
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 99, background: 'var(--accent-soft)', color: 'var(--accent-2)' }}>
+                        <Icon name="building" size={10} /> {p.project_count} project{p.project_count !== 1 ? 's' : ''}
                       </span>
                     )}
                     {p.invoice_count > 0 && (
-                      <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 99, background: 'rgba(250,204,21,.1)', color: '#fbbf24' }}>
-                        🧾 {p.invoice_count} invoice{p.invoice_count !== 1 ? 's' : ''}
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 99, background: 'var(--warn-soft)', color: 'var(--warn)' }}>
+                        <Icon name="doc" size={10} /> {p.invoice_count} invoice{p.invoice_count !== 1 ? 's' : ''}
                       </span>
                     )}
                     {p.cert_count > 0 && (
-                      <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 99, background: 'var(--good-soft)', color: 'var(--good)' }}>
-                        📜 {p.cert_count} cert{p.cert_count !== 1 ? 's' : ''}
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 99, background: 'var(--good-soft)', color: 'var(--good)' }}>
+                        <Icon name="certificate" size={10} /> {p.cert_count} cert{p.cert_count !== 1 ? 's' : ''}
                       </span>
                     )}
                   </div>
@@ -237,10 +252,17 @@ function ProfileDrawer({ profileId, onClose, navigate }) {
             <>
               {/* Header */}
               <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                <span style={{ fontSize: 32, lineHeight: 1 }}>{TYPE_ICON[profile.profile_type]}</span>
+                <span style={{ 
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', 
+                  width: 48, height: 48, borderRadius: 12, 
+                  background: 'var(--accent-soft)', color: 'var(--accent-2)',
+                  flexShrink: 0 
+                }}>
+                  <Icon name={TYPE_ICON[profile.profile_type] || 'user'} size={24} />
+                </span>
                 <div style={{ flex: 1 }}>
                   <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', marginBottom: 2 }}>{profile.company_name}</h2>
-                  <span style={{ fontSize: 11, color: 'var(--text-mute)', background: 'rgba(255,255,255,.06)', padding: '2px 8px', borderRadius: 99 }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-mute)', background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 99 }}>
                     {TYPE_LABEL[profile.profile_type] || profile.profile_type}
                   </span>
                 </div>
@@ -294,14 +316,32 @@ function ProfileDrawer({ profileId, onClose, navigate }) {
                   </div>
                 </form>
               ) : (
-                <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {profile.registration_number && (
-                    <p style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'monospace' }}>📋 {profile.registration_number}</p>
+                    <p style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Icon name="doc" size={12} style={{ color: 'var(--text-mute)' }} /> {profile.registration_number}
+                    </p>
                   )}
-                  {profile.contact_person && <p style={{ fontSize: 13, color: 'var(--text-mute)' }}>👤 {profile.contact_person}</p>}
-                  {profile.email && <p style={{ fontSize: 13, color: 'var(--text-mute)' }}>✉️ {profile.email}</p>}
-                  {profile.phone && <p style={{ fontSize: 13, color: 'var(--text-mute)' }}>📞 {profile.phone}</p>}
-                  {profile.address && <p style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>📍 {profile.address}</p>}
+                  {profile.contact_person && (
+                    <p style={{ fontSize: 13, color: 'var(--text-mute)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Icon name="user" size={13} style={{ color: 'var(--text-mute)' }} /> {profile.contact_person}
+                    </p>
+                  )}
+                  {profile.email && (
+                    <p style={{ fontSize: 13, color: 'var(--text-mute)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Icon name="send" size={13} style={{ color: 'var(--text-mute)' }} /> {profile.email}
+                    </p>
+                  )}
+                  {profile.phone && (
+                    <p style={{ fontSize: 13, color: 'var(--text-mute)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Icon name="contacts" size={13} style={{ color: 'var(--text-mute)' }} /> {profile.phone}
+                    </p>
+                  )}
+                  {profile.address && (
+                    <p style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                      <Icon name="pin" size={13} style={{ color: 'var(--text-mute)', marginTop: 2 }} /> {profile.address}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -412,16 +452,23 @@ function ProfileDrawer({ profileId, onClose, navigate }) {
                           }}>
                             <div>
                               <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{cert.cert_type}</p>
-                              {cert.holder_name && <p style={{ fontSize: 11, color: 'var(--text-mute)' }}>👤 {cert.holder_name}</p>}
+                              {cert.holder_name && <p style={{ fontSize: 11, color: 'var(--text-mute)', display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="user" size={11} /> {cert.holder_name}</p>}
                             </div>
                             <div style={{ textAlign: 'right' }}>
                               {cert.expiry_date ? (
                                 <span style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 4,
                                   fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 99,
-                                  background: expired ? 'var(--danger-soft,rgba(239,68,68,.15))' : expiring ? 'rgba(234,179,8,.15)' : 'var(--good-soft)',
+                                  background: expired ? 'var(--danger-soft)' : expiring ? 'var(--warn-soft)' : 'var(--good-soft)',
                                   color: expired ? 'var(--danger)' : expiring ? 'var(--warn)' : 'var(--good)',
                                 }}>
-                                  {expired ? `✗ Expired` : expiring ? `⚠ ${days}d left` : `✓ ${fmtDate(cert.expiry_date)}`}
+                                  {expired ? (
+                                    <><Icon name="x" size={10} /> Expired</>
+                                  ) : expiring ? (
+                                    <><Icon name="alert" size={10} /> {days}d left</>
+                                  ) : (
+                                    <><Icon name="check" size={10} /> {fmtDate(cert.expiry_date)}</>
+                                  )}
                                 </span>
                               ) : (
                                 <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>No expiry</span>

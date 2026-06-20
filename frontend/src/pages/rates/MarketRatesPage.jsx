@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import api from '../../lib/api';
+import Icon from '../../components/Icon';
 
 const CATEGORIES = [
   'All',
@@ -49,7 +50,7 @@ export default function MarketRatesPage() {
 
       {/* Info banner */}
       <div style={{ margin: '16px 32px 0', background: 'var(--info-soft)', border: '1px solid var(--info)', borderRadius: 'var(--radius)', padding: '10px 14px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-        <span style={{ fontSize: '16px' }}>💡</span>
+        <Icon name="lightbulb" size={18} style={{ color: 'var(--info)', marginTop: 2, flexShrink: 0 }} />
         <div>
           <p style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--text)' }}>Your private rate library</p>
           <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-dim)', marginTop: '2px' }}>
@@ -82,7 +83,13 @@ export default function MarketRatesPage() {
         <div className="text-center py-16 text-gray-500">Loading...</div>
       ) : rates.length === 0 ? (
         <div className="card text-center py-16">
-          <p className="text-4xl mb-3">📊</p>
+          <div style={{ 
+            width: 56, height: 56, borderRadius: 14, margin: '0 auto 16px',
+            background: 'var(--accent-soft)', color: 'var(--accent-2)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <Icon name="trend" size={26} />
+          </div>
           <p className="text-white font-medium">
             {search || category !== 'All' ? 'No rates match your search' : 'No rates added yet'}
           </p>
@@ -90,7 +97,7 @@ export default function MarketRatesPage() {
             {search || category !== 'All' ? 'Try adjusting your filters.' : 'Start building your benchmark rate library.'}
           </p>
           {!search && category === 'All' && (
-            <button onClick={() => setShowModal(true)} className="btn-primary mt-4">Add First Rate</button>
+            <button onClick={() => setShowModal(true)} className="btn primary mt-4">Add First Rate</button>
           )}
         </div>
       ) : (

@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import api from '../../lib/api';
+import Icon from '../../components/Icon';
 
 const TABS = [
-  { id: 'incidents', label: 'Incidents', icon: '⚠️' },
-  { id: 'certifications', label: 'Certifications', icon: '📜' },
-  { id: 'toolbox', label: 'Toolbox Talks', icon: '🗣️' },
+  { id: 'incidents', label: 'Incidents', icon: 'alert' },
+  { id: 'certifications', label: 'Certifications', icon: 'certificate' },
+  { id: 'toolbox', label: 'Toolbox Talks', icon: 'speech' },
 ];
 
 const SEVERITY = {
@@ -32,8 +33,8 @@ export default function SafetyPage() {
           <h1 className="page-title">Safety</h1>
           <p className="page-sub">DOSH / OSHA compliance — incidents, certifications & toolbox talks</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--good-soft)', border: '1px solid var(--good)', borderRadius: 'var(--radius-lg)', padding: '8px 16px' }}>
-          <span>🛡️</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--good-soft)', border: '1px solid var(--good)', borderRadius: 'var(--radius-lg)', padding: '8px 16px' }}>
+          <Icon name="shield" size={24} style={{ color: 'var(--good)' }} />
           <div>
             <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-mute)' }}>Safety Score</p>
             <p style={{ fontSize: '18px', fontWeight: 700, color: 'var(--good)' }}>94%</p>
@@ -61,8 +62,8 @@ export default function SafetyPage() {
       {/* Tabs */}
       <div className="tabs">
         {TABS.map(t => (
-          <button key={t.id} className={`tab${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
-            {t.icon} {t.label}
+          <button key={t.id} className={`tab${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Icon name={t.icon} size={14} /> {t.label}
           </button>
         ))}
       </div>
@@ -101,15 +102,28 @@ function IncidentsTab() {
         <div className="text-center py-12 text-gray-500">Loading...</div>
       ) : incidents.length === 0 ? (
         <div className="card text-center py-16">
-          <p className="text-4xl mb-3">✅</p>
+          <div style={{ 
+            width: 56, height: 56, borderRadius: 14, margin: '0 auto 16px',
+            background: 'var(--good-soft)', color: 'var(--good)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <Icon name="check" size={26} />
+          </div>
           <p className="text-white font-medium">No incidents reported</p>
           <p className="text-gray-400 text-sm mt-1">Keep up the great work on site safety!</p>
         </div>
       ) : (
         <div className="space-y-3">
           {incidents.map(inc => (
-            <div key={inc.id} className="card flex items-start gap-4">
-              <div className="text-3xl">⚠️</div>
+            <div key={inc.id} className="card flex items-start gap-4" style={{ padding: '16px 20px' }}>
+              <div style={{ 
+                width: 36, height: 36, borderRadius: 8, 
+                background: inc.severity === 'fatal' || inc.severity === 'major' ? 'var(--danger-soft)' : 'var(--warn-soft)', 
+                color: inc.severity === 'fatal' || inc.severity === 'major' ? 'var(--danger)' : 'var(--warn)',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+              }}>
+                <Icon name="alert" size={18} />
+              </div>
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-1">
                   <p className="text-white font-medium">{inc.title}</p>
@@ -117,11 +131,11 @@ function IncidentsTab() {
                   {inc.lost_time && <span className="badge-danger">Lost Time</span>}
                 </div>
                 <p className="text-gray-400 text-sm">{inc.description}</p>
-                <div className="flex gap-4 mt-2 text-xs text-gray-500">
-                  <span>📅 {inc.incident_date ? new Date(inc.incident_date).toLocaleDateString('en-MY') : '—'}</span>
-                  <span>📍 {inc.location || '—'}</span>
-                  <span>👤 {inc.reported_by_name || '—'}</span>
-                  {inc.corrective_action && <span>🔧 Action taken</span>}
+                <div className="flex gap-4 mt-2 text-xs text-gray-500" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="calendar" size={12} /> {inc.incident_date ? new Date(inc.incident_date).toLocaleDateString('en-MY') : '—'}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="pin" size={12} /> {inc.location || '—'}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="user" size={12} /> {inc.reported_by_name || '—'}</span>
+                  {inc.corrective_action && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="tool" size={12} /> Action taken</span>}
                 </div>
               </div>
               <span className={`text-xs px-2 py-1 rounded-full ${inc.status === 'closed' ? 'badge-success' : 'badge-warning'}`}>
@@ -356,23 +370,35 @@ function ToolboxTab() {
         <div className="text-center py-12 text-gray-500">Loading...</div>
       ) : talks.length === 0 ? (
         <div className="card text-center py-16">
-          <p className="text-4xl mb-3">🗣️</p>
+          <div style={{ 
+            width: 56, height: 56, borderRadius: 14, margin: '0 auto 16px',
+            background: 'var(--accent-soft)', color: 'var(--accent-2)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <Icon name="speech" size={26} />
+          </div>
           <p className="text-white font-medium">No toolbox talks recorded</p>
           <p className="text-gray-400 text-sm mt-1">Record your daily safety briefings here.</p>
-          <button onClick={() => setShowModal(true)} className="btn-primary mt-4">Record First Talk</button>
+          <button onClick={() => setShowModal(true)} className="btn primary mt-4">Record First Talk</button>
         </div>
       ) : (
         <div className="space-y-3">
           {talks.map(talk => (
-            <div key={talk.id} className="card flex items-start gap-4">
-              <div className="text-3xl">🗣️</div>
+            <div key={talk.id} className="card flex items-start gap-4" style={{ padding: '16px 20px' }}>
+              <div style={{ 
+                width: 36, height: 36, borderRadius: 8, 
+                background: 'var(--accent-soft)', color: 'var(--accent-2)',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+              }}>
+                <Icon name="speech" size={18} />
+              </div>
               <div className="flex-1">
                 <p className="text-white font-medium">{talk.topic}</p>
                 <p className="text-gray-400 text-sm mt-0.5">{talk.summary}</p>
-                <div className="flex gap-4 mt-2 text-xs text-gray-500">
-                  <span>📅 {talk.talk_date ? new Date(talk.talk_date).toLocaleDateString('en-MY') : '—'}</span>
-                  <span>👥 {talk.attendees_count || 0} attendees</span>
-                  <span>👤 Conducted by {talk.conducted_by_name || '—'}</span>
+                <div className="flex gap-4 mt-2 text-xs text-gray-500" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="calendar" size={12} /> {talk.talk_date ? new Date(talk.talk_date).toLocaleDateString('en-MY') : '—'}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="users" size={12} /> {talk.attendees_count || 0} attendees</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="user" size={12} /> Conducted by {talk.conducted_by_name || '—'}</span>
                 </div>
               </div>
             </div>

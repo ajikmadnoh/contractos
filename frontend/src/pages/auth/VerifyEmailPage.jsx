@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import api from '../../lib/api';
+import Icon from '../../components/Icon';
+import BrandLogo from '../../components/BrandLogo';
 
 export default function VerifyEmailPage() {
   const [searchParams] = useSearchParams();
@@ -15,21 +17,81 @@ export default function VerifyEmailPage() {
   }, [token]);
 
   const content = {
-    verifying: { icon: '⏳', title: 'Verifying your email...', text: 'Please wait a moment.', color: 'text-gray-400' },
-    success: { icon: '✅', title: 'Email verified!', text: 'Your account is ready. You can now sign in.', color: 'text-success' },
-    invalid: { icon: '❌', title: 'Invalid or expired link', text: 'Please request a new verification email or contact support.', color: 'text-red-400' },
+    verifying: { 
+      icon: 'loader', 
+      title: 'Verifying your email...', 
+      text: 'Please wait a moment while we process your request.', 
+      color: 'var(--text)', 
+      iconColor: 'var(--accent)',
+      spin: true
+    },
+    success: { 
+      icon: 'check', 
+      title: 'Email verified!', 
+      text: 'Your account has been successfully verified. You are ready to start using ContractOS.', 
+      color: 'var(--good)', 
+      iconColor: 'var(--good)'
+    },
+    invalid: { 
+      icon: 'x', 
+      title: 'Invalid or expired link', 
+      text: 'The email verification link you used is invalid or has expired. Please request a new link or contact support.', 
+      color: 'var(--danger)', 
+      iconColor: 'var(--danger)'
+    },
   }[status];
 
   return (
-    <div className="min-h-screen bg-navy-dark flex items-center justify-center px-4">
-      <div className="card max-w-md w-full text-center">
-        <div className="text-5xl mb-4">{content.icon}</div>
-        <h2 className={`text-xl font-bold mb-2 ${content.color}`}>{content.title}</h2>
-        <p className="text-gray-400 text-sm mb-6">{content.text}</p>
-        {status !== 'verifying' && (
-          <Link to="/login" className="btn-primary inline-block">Go to Login</Link>
-        )}
+    <div className="login-page">
+      <div style={{ width: '100%', maxWidth: '400px' }}>
+        {/* Brand */}
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+            <BrandLogo size={36} />
+            <span style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.5px' }}>ContractOS</span>
+          </div>
+          <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-dim)' }}>
+            Enterprise construction management
+          </p>
+        </div>
+
+        <div className="login-card" style={{ textAlign: 'center' }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: 14, margin: '0 auto 16px',
+            background: content.spin ? 'var(--accent-soft)' : content.iconColor === 'var(--good)' ? 'var(--good-soft)' : 'var(--danger-soft)',
+            color: content.iconColor,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Icon 
+              name={content.icon} 
+              size={24} 
+              className={content.spin ? 'animate-spin' : ''} 
+              style={content.spin ? { animation: 'spin 1s linear infinite' } : {}}
+            />
+          </div>
+
+          <h2 style={{ fontSize: 'var(--font-xl)', fontWeight: 700, color: content.color, marginBottom: '6px' }}>
+            {content.title}
+          </h2>
+          <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-dim)', marginBottom: '24px', lineHeight: 1.5 }}>
+            {content.text}
+          </p>
+
+          {status !== 'verifying' ? (
+            <Link to="/login" className="btn primary" style={{ width: '100%', justifyContent: 'center', textDecoration: 'none' }}>
+              Go to Login
+            </Link>
+          ) : (
+            <div style={{ height: 38 }} />
+          )}
+        </div>
       </div>
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

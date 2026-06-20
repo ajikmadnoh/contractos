@@ -106,8 +106,10 @@ export default function FinancePage() {
             <span style={{ fontWeight: 600 }}>{closesLabel}</span>
           </div>
           {overdueInvoices > 0 && (
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: 'var(--danger-soft,rgba(239,68,68,.15))', color: 'var(--danger)' }}>
-              ⚠ {overdueInvoices} overdue invoice{overdueInvoices !== 1 ? 's' : ''}
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: 'var(--danger-soft)', color: 'var(--danger)', display: 'inline-flex', alignItems: 'center' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Icon name="alert" size={12} /> {overdueInvoices} overdue invoice{overdueInvoices !== 1 ? 's' : ''}
+              </span>
             </span>
           )}
           <button className="btn ghost"><Icon name="filter" size={14} /> Filter</button>

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import Icon from '../components/Icon';
+import BrandLogo from '../components/BrandLogo';
 
 const features = [
   { icon: 'building',   title: 'Project Management',    desc: 'Track milestones, tasks and team assignments across all your projects in one place.' },
@@ -109,7 +110,7 @@ export default function LandingPage() {
         <div style={s.navInner}>
           {/* Brand */}
           <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
-            <div className="brand-mark" style={{ width: '30px', height: '30px', fontSize: '15px', borderRadius: '8px' }}>C</div>
+            <BrandLogo size={30} />
             <span style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.3px' }}>ContractOS</span>
           </Link>
 
@@ -283,7 +284,7 @@ export default function LandingPage() {
       <footer style={s.footer}>
         <div style={s.footerIn}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div className="brand-mark" style={{ width: '24px', height: '24px', fontSize: '12px', borderRadius: '6px' }}>C</div>
+            <BrandLogo size={24} />
             <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text)' }}>ContractOS</span>
           </div>
           <div style={{ display: 'flex', gap: '24px' }}>

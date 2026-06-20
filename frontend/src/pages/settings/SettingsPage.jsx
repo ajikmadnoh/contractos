@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import api from '../../lib/api';
 import useAuthStore from '../../store/authStore';
+import Icon from '../../components/Icon';
 
 const TABS = [
-  { id: 'company', label: 'Company', icon: '🏢' },
-  { id: 'security', label: 'Security', icon: '🔐' },
-  { id: 'billing', label: 'Billing', icon: '💳' },
-  { id: 'api', label: 'API Keys', icon: '🔑' },
+  { id: 'company', label: 'Company', icon: 'building' },
+  { id: 'security', label: 'Security', icon: 'shield' },
+  { id: 'billing', label: 'Billing', icon: 'creditcard' },
+  { id: 'api', label: 'API Keys', icon: 'key' },
 ];
 
 export default function SettingsPage() {
@@ -28,8 +29,8 @@ export default function SettingsPage() {
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`nav-item${tab === t.id ? ' active' : ''}`}
-              style={{ width: '100%' }}>
-              <span>{t.icon}</span>{t.label}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Icon name={t.icon} size={14} /> {t.label}
             </button>
           ))}
         </nav>
@@ -94,7 +95,7 @@ function CompanySettings() {
           <button type="submit" disabled={isSubmitting} className="btn-primary">
             {isSubmitting ? 'Saving...' : 'Save Changes'}
           </button>
-          {saved && <span className="text-success text-sm">✓ Saved successfully</span>}
+          {saved && <span className="text-success text-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={12} /> Saved successfully</span>}
         </div>
       </form>
     </div>
@@ -116,7 +117,7 @@ function SecuritySettings() {
       <div className="card max-w-lg">
         <h2 className="text-lg font-semibold text-white mb-5">Change Password</h2>
         {done ? (
-          <p className="text-success text-sm">✓ Password changed successfully.</p>
+          <p className="text-success text-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={12} /> Password changed successfully.</p>
         ) : (
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { format } from 'date-fns';
+import Icon from '../../components/Icon';
 
 const STATUS_STYLES = {
   paid: 'badge-success',
@@ -55,10 +56,16 @@ export default function InvoicingPage() {
         <div className="text-gray-400 text-sm">Loading invoices...</div>
       ) : invoices.length === 0 ? (
         <div className="card text-center py-16">
-          <div className="text-5xl mb-4">🧾</div>
+          <div style={{ 
+            width: 56, height: 56, borderRadius: 14, margin: '0 auto 16px',
+            background: 'var(--accent-soft)', color: 'var(--accent-2)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <Icon name="doc" size={26} />
+          </div>
           <h3 className="text-white font-semibold mb-2">No invoices yet</h3>
           <p className="text-gray-400 text-sm mb-6">Create your first invoice to start tracking payments.</p>
-          <button onClick={() => setShowNew(true)} className="btn-primary">Create Invoice</button>
+          <button onClick={() => setShowNew(true)} className="btn primary">Create Invoice</button>
         </div>
       ) : (
         <div className="card overflow-hidden p-0">
@@ -393,15 +400,15 @@ function InvoiceDetailDrawer({ invoiceId, onClose, onStatusChanged }) {
                   <button
                     disabled={markingSent}
                     onClick={() => changeStatus('sent', setMarkingSent)}
-                    style={{ padding: '10px', borderRadius: 8, border: '1px solid var(--info)', background: 'rgba(59,130,246,.12)', color: 'var(--info)', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
-                    {markingSent ? 'Updating…' : '📤 Mark as Sent'}
+                    style={{ padding: '10px', borderRadius: 8, border: '1px solid var(--info)', background: 'var(--info-soft)', color: 'var(--info)', fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    {markingSent ? 'Updating…' : <><Icon name="send" size={13} /> Mark as Sent</>}
                   </button>
                 )}
                 <button
                   disabled={markingPaid}
                   onClick={() => changeStatus('paid', setMarkingPaid)}
-                  style={{ padding: '10px', borderRadius: 8, border: '1px solid var(--good)', background: 'var(--good-soft)', color: 'var(--good)', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
-                  {markingPaid ? 'Updating…' : '✓ Mark as Paid'}
+                  style={{ padding: '10px', borderRadius: 8, border: '1px solid var(--good)', background: 'var(--good-soft)', color: 'var(--good)', fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  {markingPaid ? 'Updating…' : <><Icon name="check" size={13} /> Mark as Paid</>}
                 </button>
                 {inv.status !== 'cancelled' && (
                   <button
@@ -413,8 +420,10 @@ function InvoiceDetailDrawer({ invoiceId, onClose, onStatusChanged }) {
               </div>
             )}
             {inv.status === 'paid' && (
-              <div style={{ padding: '20px 24px', textAlign: 'center', color: 'var(--good)' }}>
-                <p style={{ fontSize: 24, marginBottom: 6 }}>✓</p>
+              <div style={{ padding: '20px 24px', textAlign: 'center', color: 'var(--good)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 42, height: 42, borderRadius: '50%', background: 'var(--good-soft)', color: 'var(--good)', marginBottom: 8 }}>
+                  <Icon name="check" size={20} />
+                </div>
                 <p style={{ fontWeight: 600 }}>Invoice Paid</p>
               </div>
             )}

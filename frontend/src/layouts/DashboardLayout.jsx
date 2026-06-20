@@ -5,6 +5,7 @@ import useAuthStore from '../store/authStore';
 import Icon from '../components/Icon';
 import NotificationBell from '../components/NotificationBell';
 import api from '../lib/api';
+import BrandLogo from '../components/BrandLogo';
 
 const NAV = [
   {
@@ -47,19 +48,7 @@ const NAV = [
 
 // CMD_ITEMS built dynamically in DashboardLayout — see buildCmdItems()
 
-function BrandMark() {
-  return (
-    <div className="brand-mark-svg">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"
-        strokeLinecap="round" strokeLinejoin="round">
-        <rect x="4" y="13" width="4" height="8" rx="1" fill="currentColor" stroke="none"/>
-        <rect x="10" y="9" width="4" height="12" rx="1" fill="currentColor" stroke="none"/>
-        <rect x="16" y="5" width="4" height="16" rx="1" fill="currentColor" stroke="none"/>
-        <path d="M3 21h18" />
-      </svg>
-    </div>
-  );
-}
+// Brand logo integrated via reusable BrandLogo component
 
 function CommandPalette({ open, onClose, items = [] }) {
   const [q, setQ] = useState('');
@@ -230,7 +219,7 @@ export default function DashboardLayout() {
       {/* ── SIDEBAR ────────────────────────────────────── */}
       <aside className="sidebar">
         <div className="brand">
-          <BrandMark />
+          <BrandLogo size={28} />
           {sideMode === 'full' && (
             <div className="brand-name-wrap">
               ContractOS

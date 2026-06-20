@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import api from '../../lib/api';
 import useAuthStore from '../../store/authStore';
 import Icon from '../../components/Icon';
+import BrandLogo from '../../components/BrandLogo';
 
 export default function LoginPage() {
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm();
@@ -28,7 +29,7 @@ export default function LoginPage() {
         {/* Brand */}
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-            <div className="brand-mark" style={{ width: '36px', height: '36px', fontSize: '18px', borderRadius: '10px' }}>C</div>
+            <BrandLogo size={36} />
             <span style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.5px' }}>ContractOS</span>
           </div>
           <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-dim)' }}>

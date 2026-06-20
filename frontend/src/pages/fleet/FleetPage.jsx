@@ -96,10 +96,16 @@ function VehiclesTab() {
         <div className="text-center py-12 text-gray-500">Loading...</div>
       ) : vehicles.length === 0 ? (
         <div className="card text-center py-16">
-          <p className="text-4xl mb-3">🚛</p>
+          <div style={{ 
+            width: 56, height: 56, borderRadius: 14, margin: '0 auto 16px',
+            background: 'var(--accent-soft)', color: 'var(--accent)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <Icon name="truck" size={26} />
+          </div>
           <p className="text-white font-medium">No fleet registered yet</p>
           <p className="text-gray-400 text-sm mt-1">Add your vehicles, machinery and equipment.</p>
-          <button onClick={() => setShowModal(true)} className="btn-primary mt-4">Add First Vehicle</button>
+          <button onClick={() => setShowModal(true)} className="btn primary mt-4">Add First Vehicle</button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -114,18 +120,18 @@ function VehiclesTab() {
                   {v.status?.replace('_', ' ') || 'Unknown'}
                 </span>
               </div>
-              <div className="space-y-1 text-sm text-gray-400">
-                <p>🏷️ {v.vehicle_type || '—'} {v.make && `· ${v.make}`} {v.model && v.model}</p>
-                {v.year && <p>📅 Year: {v.year}</p>}
-                {v.assigned_project && <p>📁 Assigned: {v.assigned_project}</p>}
+              <div className="space-y-1.5 text-sm text-gray-400" style={{ marginTop: 8 }}>
+                <p style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="tag" size={12} /> {v.vehicle_type || '—'} {v.make && `· ${v.make}`} {v.model && v.model}</p>
+                {v.year && <p style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="calendar" size={12} /> Year: {v.year}</p>}
+                {v.assigned_project && <p style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="folder" size={12} /> Assigned: {v.assigned_project}</p>}
                 {v.road_tax_expiry && (
-                  <p className={`text-xs ${new Date(v.road_tax_expiry) < new Date() ? 'text-red-400' : 'text-gray-400'}`}>
-                    🗒️ Road Tax: {new Date(v.road_tax_expiry).toLocaleDateString('en-MY')}
+                  <p className={`text-xs ${new Date(v.road_tax_expiry) < new Date() ? 'text-red-400' : 'text-gray-400'}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Icon name="doc" size={12} /> Road Tax: {new Date(v.road_tax_expiry).toLocaleDateString('en-MY')}
                   </p>
                 )}
                 {v.insurance_expiry && (
-                  <p className={`text-xs ${new Date(v.insurance_expiry) < new Date() ? 'text-red-400' : 'text-gray-400'}`}>
-                    🛡️ Insurance: {new Date(v.insurance_expiry).toLocaleDateString('en-MY')}
+                  <p className={`text-xs ${new Date(v.insurance_expiry) < new Date() ? 'text-red-400' : 'text-gray-400'}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Icon name="shield" size={12} /> Insurance: {new Date(v.insurance_expiry).toLocaleDateString('en-MY')}
                   </p>
                 )}
               </div>
