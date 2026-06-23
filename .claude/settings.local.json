@@ -95,7 +95,18 @@
       "Bash(node --check \"D:/Project/Web Project/contractos/backend/src/routes/invoices.routes.js\")",
       "Bash(node --check \"D:/Project/Web Project/contractos/backend/src/routes/profiles.routes.js\")",
       "Bash(node --check \"D:/Project/Web Project/contractos/backend/src/routes/crm.routes.js\")",
-      "Bash(node --check \"D:/Project/Web Project/contractos/backend/src/routes/documents.routes.js\")"
+      "Bash(node --check \"D:/Project/Web Project/contractos/backend/src/routes/documents.routes.js\")",
+      "Skill(run)",
+      "PowerShell(docker start contractos-db *)",
+      "PowerShell(Set-Location \"C:\\\\Users\\\\paish\\\\Desktop\\\\Codes\\\\contractos\\\\backend\"; Start-Process powershell -ArgumentList \"-NoExit\", \"-Command\", \"npm run dev\" -WindowStyle Normal)",
+      "PowerShell(Start-Sleep -Seconds 3; Set-Location \"C:\\\\Users\\\\paish\\\\Desktop\\\\Codes\\\\contractos\\\\frontend\"; Start-Process powershell -ArgumentList \"-NoExit\", \"-Command\", \"npm run dev\" -WindowStyle Normal)",
+      "PowerShell(Start-Sleep -Seconds 5; Invoke-RestMethod -Uri \"http://localhost:5000/api/health\" -ErrorAction SilentlyContinue 2>&1)",
+      "PowerShell($r = Invoke-WebRequest -Uri \"http://localhost:3000\" -UseBasicParsing -ErrorAction SilentlyContinue; $r.StatusCode)",
+      "Bash(curl *)",
+      "PowerShell(Get-Process *)",
+      "PowerShell(Stop-Process *)",
+      "PowerShell(Set-Location \"C:\\\\Users\\\\paish\\\\Desktop\\\\Codes\\\\contractos\\\\backend\"; Start-Process powershell -ArgumentList \"-NoExit\", \"-Command\", \"npm run dev\" -WindowStyle Normal; Write-Host \"Backend starting on 5001...\")",
+      "PowerShell(Start-Sleep -Seconds 4; Set-Location \"C:\\\\Users\\\\paish\\\\Desktop\\\\Codes\\\\contractos\\\\frontend\"; Start-Process powershell -ArgumentList \"-NoExit\", \"-Command\", \"npm run dev\" -WindowStyle Normal; Write-Host \"Frontend starting on 3000...\")"
     ]
   }
 }
